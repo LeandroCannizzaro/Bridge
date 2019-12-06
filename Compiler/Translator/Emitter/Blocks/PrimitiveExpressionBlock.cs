@@ -1,5 +1,6 @@
 ﻿using Bridge.Contract;
 using ICSharpCode.NRefactory.CSharp;
+using ICSharpCode.NRefactory.Semantics;
 
 namespace Bridge.Translator
 {
@@ -30,13 +31,16 @@ namespace Bridge.Translator
                 return;
             }
 
-            if (this.PrimitiveExpression.Value is RawValue)
+            var isTplRaw = this.Emitter.TemplateModifier == "raw";
+            if (this.PrimitiveExpression.Value is RawValue || isTplRaw)
             {
-                this.Write(this.PrimitiveExpression.Value.ToString());
+                this.Write(AbstractEmitterBlock.UpdateIndentsInString(this.PrimitiveExpression.Value.ToString(), 0));
             }
             else
             {
-                this.WriteScript(Bridge.Translator.Emitter.ConvertConstant(this.PrimitiveExpression.Value, this.PrimitiveExpression, this.Emitter));
+                object value = this.PrimitiveExpression.Value;
+
+                this.WriteScript(Bridge.Translator.Emitter.ConvertConstant(value, this.PrimitiveExpression, this.Emitter));
             }
         }
     }

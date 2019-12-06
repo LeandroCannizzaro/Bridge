@@ -3,8 +3,9 @@
 
         getValue: function (obj) {
             obj = Bridge.unbox(obj, true);
+
             if (!Bridge.hasValue(obj)) {
-                throw new System.InvalidOperationException("Nullable instance doesn't have a value.");
+                throw new System.InvalidOperationException.$ctor1("Nullable instance doesn't have a value.");
             }
 
             return obj;
@@ -63,7 +64,7 @@
         },
 
         toStringFn: function (fn) {
-            return function(v) {
+            return function (v) {
                 return System.Nullable.toString(v, fn);
             };
         },
@@ -79,7 +80,15 @@
         },
 
         xor: function (a, b) {
-            return Bridge.hasValue$1(a, b) ? a ^ b : null;
+            if (Bridge.hasValue$1(a, b)) {
+                if (Bridge.isBoolean(a) && Bridge.isBoolean(b)) {
+                    return a != b;
+                }
+
+                return a ^ b;
+            }
+
+            return null;
         },
 
         gt: function (a, b) {
@@ -192,7 +201,7 @@
 
         getUnderlyingType: function (nullableType) {
             if (!nullableType) {
-                throw new System.ArgumentNullException("nullableType");
+                throw new System.ArgumentNullException.$ctor1("nullableType");
             }
 
             if (Bridge.Reflection.isGenericType(nullableType) &&
@@ -214,7 +223,7 @@
 
     System.Nullable = nullable;
 
-    Bridge.define('System.Nullable$1', function (T) {
+    Bridge.define("System.Nullable$1", function (T) {
         return {
             $kind: "struct",
 
@@ -225,7 +234,7 @@
                     return null;
                 },
 
-                $is: function(obj) {
+                $is: function (obj) {
                     return Bridge.is(obj, T);
                 }
             }

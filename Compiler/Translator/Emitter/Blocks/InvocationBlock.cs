@@ -171,14 +171,14 @@ namespace Bridge.Translator
                             value = value.Trim();
                             if (value[value.Length - 1] == ';' || value.EndsWith("*/", StringComparison.InvariantCulture) || value.StartsWith("//"))
                             {
-                                this.Emitter.EnableSemicolon = false;
+                                this.Emitter.SkipSemiColon = true;
                                 this.WriteNewLine();
                             }
                         }
                         else
                         {
                             // Empty string, emit nothing.
-                            this.Emitter.EnableSemicolon = false;
+                            this.Emitter.SkipSemiColon = true;
                         }
 
                         this.Emitter.ReplaceAwaiterByVar = oldValue;
@@ -636,6 +636,8 @@ namespace Bridge.Translator
                         isIgnoreGeneric = Helpers.IsIgnoreGeneric(invocationResult.Member, this.Emitter);
                     }
 
+                    bool isWrapRest = false;
+
                     if (needExpand && isIgnore)
                     {
                         StringBuilder savedBuilder = this.Emitter.Output;
@@ -658,10 +660,14 @@ namespace Bridge.Translator
                         if (argsExpressions.Length > 1)
                         {
                             this.WriteOpenBracket();
-                            new ExpressionListBlock(this.Emitter, argsExpressions.Take(argsExpressions.Length - 1).ToArray(), paramsArg, invocationExpression, openPos).Emit();
+                            var elb = new ExpressionListBlock(this.Emitter, argsExpressions.Take(argsExpressions.Length - 1).ToArray(), paramsArg, invocationExpression, openPos);
+                            elb.IgnoreExpandParams = true;
+                            elb.Emit();
                             this.WriteCloseBracket();
                             this.Write(".concat(");
-                            new ExpressionListBlock(this.Emitter, new Expression[] { argsExpressions[argsExpressions.Length - 1] }, paramsArg, invocationExpression, openPos).Emit();
+                            elb = new ExpressionListBlock(this.Emitter, new Expression[] { argsExpressions[argsExpressions.Length - 1] }, paramsArg, invocationExpression, openPos);
+                            elb.IgnoreExpandParams = true;
+                            elb.Emit();
                             this.Write(")");
                         }
                         else
@@ -671,6 +677,11 @@ namespace Bridge.Translator
                     }
                     else
                     {
+                        if (method != null && method.Attributes.Any(a => a.AttributeType.FullName == "Bridge.WrapRestAttribute"))
+                        {
+                            isWrapRest = true;
+                        }
+
                         this.Emitter.Comma = false;
                         if (!isIgnore && !isIgnoreGeneric && argsInfo.HasTypeArguments)
                         {
@@ -684,8 +695,20 @@ namespace Bridge.Translator
 
                         new ExpressionListBlock(this.Emitter, argsExpressions, paramsArg, invocationExpression, openPos).Emit();
                     }
-                    this.Emitter.Comma = false;
-                    this.WriteCloseParentheses();
+
+
+                    if (isWrapRest)
+                    {
+                        this.EnsureComma(false);
+                        this.Write("Bridge.fn.bind(this, function () ");
+                        this.BeginBlock();
+                        this.Emitter.WrapRestCounter++;
+                        this.Emitter.SkipSemiColon = true;
+                    } else
+                    {
+                        this.Emitter.Comma = false;
+                        this.WriteCloseParentheses();
+                    }
                 }
             }
 

@@ -8,6 +8,12 @@ namespace Bridge.Contract
 {
     public interface IEmitter : ILog, IAstVisitor
     {
+        string Tag
+        {
+            get;
+            set;
+        }
+
         IAssemblyInfo AssemblyInfo
         {
             get;
@@ -527,5 +533,9 @@ namespace Bridge.Contract
 
         bool InConstructor { get; set; }
         CompilerRule Rules { get; set; }
+        bool HasModules { get; set; }
+        string TemplateModifier { get; set; }
+
+        int WrapRestCounter { get; set; }
     }
 }

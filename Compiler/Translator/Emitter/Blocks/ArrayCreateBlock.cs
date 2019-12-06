@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Bridge.Translator
 {
-    public class ArrayCreateBlock : AbstractEmitterBlock
+    public class ArrayCreateBlock : ConversionBlock
     {
         public ArrayCreateBlock(IEmitter emitter, ArrayCreateExpression arrayCreateExpression)
             : base(emitter, arrayCreateExpression)
@@ -36,7 +36,12 @@ namespace Bridge.Translator
             set;
         }
 
-        protected override void DoEmit()
+        protected override Expression GetExpression()
+        {
+            return this.ArrayCreateExpression;
+        }
+
+        protected override void EmitConversionExpression()
         {
             this.VisitArrayCreateExpression();
         }
@@ -123,11 +128,29 @@ namespace Bridge.Translator
                 this.Write(JS.Types.System.Array.CREATE);
                 this.WriteOpenParentheses();
 
-                var defaultInitializer =
-                    new PrimitiveExpression(Inspector.GetDefaultFieldValue(at.ElementType, arrayCreateExpression.Type),
-                        "?");
+                var def = Inspector.GetDefaultFieldValue(at.ElementType, arrayCreateExpression.Type);
+                var defaultInitializer = new PrimitiveExpression(def, "?");
 
-                if (defaultInitializer.Value is IType)
+                if (def == at.ElementType || def is RawValue)
+                {
+                    this.WriteFunction();
+                    this.WriteOpenCloseParentheses();
+                    this.BeginBlock();
+                    this.WriteReturn(true);
+                    if (def is RawValue)
+                    {
+                        this.Write(def.ToString());
+                    }
+                    else
+                    {
+                        this.Write(Inspector.GetStructDefaultValue(at.ElementType, this.Emitter));
+                    }
+
+                    this.WriteSemiColon();
+                    this.WriteNewLine();
+                    this.EndBlock();
+                }
+                else if (defaultInitializer.Value is IType)
                 {
                     this.Write(Inspector.GetStructDefaultValue((IType) defaultInitializer.Value, this.Emitter));
                 }
@@ -150,6 +173,13 @@ namespace Bridge.Translator
 
             if (rr.InitializerElements != null && rr.InitializerElements.Count > 0)
             {
+                string typedArrayName = null;
+                bool isTyped = this.Emitter.AssemblyInfo.UseTypedArrays && (typedArrayName = Helpers.GetTypedArrayName(at.ElementType)) != null;
+                if (isTyped)
+                {
+                    this.Write("new ", typedArrayName, "(");
+                }
+
                 this.WriteOpenBracket();
 
                 if (this.ArrayCreateResolveResult != null)
@@ -174,6 +204,11 @@ namespace Bridge.Translator
                 }
 
                 this.WriteCloseBracket();
+
+                if (isTyped)
+                {
+                    this.Write(")");
+                }
             }
             else if (at.Dimensions > 1)
             {

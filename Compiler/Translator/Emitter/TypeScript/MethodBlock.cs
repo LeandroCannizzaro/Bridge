@@ -35,15 +35,20 @@ namespace Bridge.Translator.TypeScript
             var isInterface = memberResult.Member.DeclaringType.Kind == TypeKind.Interface;
             var ignoreInterface = isInterface &&
                                       memberResult.Member.DeclaringType.TypeParameterCount > 0;
-            this.WriteSignature(methodDeclaration, overloads, ignoreInterface);
+            this.WriteSignature(methodDeclaration, overloads, ignoreInterface, isInterface);
             if (!ignoreInterface && isInterface)
             {
-                this.WriteSignature(methodDeclaration, overloads, true);
+                this.WriteSignature(methodDeclaration, overloads, true, isInterface);
             }
         }
 
-        private void WriteSignature(MethodDeclaration methodDeclaration, OverloadsCollection overloads, bool ignoreInterface)
+        private void WriteSignature(MethodDeclaration methodDeclaration, OverloadsCollection overloads, bool ignoreInterface, bool isInterface)
         {
+            if (!isInterface && !methodDeclaration.HasModifier(Modifiers.Public))
+            {
+                return;
+            }
+
             string name = overloads.GetOverloadName(ignoreInterface);
             this.Write(name);
 
@@ -103,6 +108,12 @@ namespace Bridge.Translator.TypeScript
             var retType = BridgeTypes.ToTypeScriptName(methodDeclaration.ReturnType, this.Emitter);
             this.Write(retType);
 
+            var resolveResult = this.Emitter.Resolver.ResolveNode(methodDeclaration.ReturnType, this.Emitter);
+            if (resolveResult != null && (resolveResult.Type.IsReferenceType.HasValue && resolveResult.Type.IsReferenceType.Value || resolveResult.Type.IsKnownType(KnownTypeCode.NullableOfT)))
+            {
+                this.Write(" | null");
+            }
+
             this.WriteSemiColon();
             this.WriteNewLine();
         }
@@ -131,6 +142,13 @@ namespace Bridge.Translator.TypeScript
 
                 this.WriteColon();
                 name = BridgeTypes.ToTypeScriptName(p.Type, this.Emitter);
+
+                var resolveResult = this.Emitter.Resolver.ResolveNode(p.Type, this.Emitter);
+                if (resolveResult != null && (resolveResult.Type.IsReferenceType.HasValue && resolveResult.Type.IsReferenceType.Value || resolveResult.Type.IsKnownType(KnownTypeCode.NullableOfT)))
+                {
+                    name += " | null";
+                }
+
                 if (p.ParameterModifier == ParameterModifier.Out || p.ParameterModifier == ParameterModifier.Ref)
                 {
                     name = "{v: " + name + "}";

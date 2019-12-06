@@ -167,7 +167,7 @@ namespace Bridge.ClientTest.ConvertTests
 
                     var expected = expectedValues[i];
 
-                    Assert.AreEqual(expected, result);
+                    Assert.True(expected.Equals(result));
                 }
                 catch (Exception ex)
                 {
@@ -324,7 +324,7 @@ namespace Bridge.ClientTest.ConvertTests
         /// <summary>
         /// Helper class to test that the IFormatProvider is being called.
         /// </summary>
-        [Convention(Target = ConventionTarget.Member, Notation = Notation.LowerCamelCase)]
+        [Convention(Target = ConventionTarget.Member, Notation = Notation.CamelCase)]
         protected class TestFormatProvider : IFormatProvider
         {
             public static readonly TestFormatProvider s_instance = new TestFormatProvider();
@@ -335,6 +335,10 @@ namespace Bridge.ClientTest.ConvertTests
 
             public object GetFormat(Type formatType)
             {
+                if (formatType == typeof(System.Globalization.NumberFormatInfo))
+                {
+                    return System.Globalization.CultureInfo.CurrentCulture.NumberFormat;
+                }
                 return System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat;
             }
 

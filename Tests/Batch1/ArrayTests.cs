@@ -95,6 +95,17 @@ namespace Bridge.ClientTest
             }
 
             [Test]
+            public void LongLengthWorks()
+            {
+                Assert.AreEqual((long)0, new int[0].LongLength, "0 cast into long matches empty array's LongLength.");
+                Assert.AreEqual((long)1, new[] { "x" }.LongLength, "1 cast into long matches 1 element big array's LongLength.");
+                Assert.AreEqual((long)2, new[] { "x", "y" }.LongLength, "2 cast into long matches 2 elements big array's LongLength.");
+                Assert.AreEqual(0L, new int[0].LongLength, "Int64 0 matches empty array's LongLength.");
+                Assert.AreEqual(1L, new[] { "x" }.LongLength, "Int64 1 matches 1 element big array's LongLength.");
+                Assert.AreEqual(2L, new[] { "x", "y" }.LongLength, "Int64 2 matches 2 elements big array's LongLength.");
+            }
+
+            [Test]
             public void RankIsOne()
             {
                 Assert.AreEqual(1, new int[0].Rank);
@@ -182,8 +193,8 @@ namespace Bridge.ClientTest
             public void ConcatWorks()
             {
                 var arr = new[] { "a", "b" };
-                Assert.AreDeepEqual(new[] { "a", "b", "c" }, arr.Concat("c"));
-                Assert.AreDeepEqual(new[] { "a", "b", "c", "d" }, arr.Concat("c", "d"));
+                Assert.AreDeepEqual(new[] { "a", "b", "c" }, arr.Concat(new[] { "c" }).ToArray());
+                Assert.AreDeepEqual(new[] { "a", "b", "c", "d" }, arr.Concat(new[] { "c", "d" }).ToArray());
                 Assert.AreDeepEqual(new[] { "a", "b" }, arr);
             }
 
@@ -272,7 +283,7 @@ namespace Bridge.ClientTest
             [Test]
             public void IndexOfWithoutStartIndexWorks()
             {
-                Assert.AreEqual(1, new[] { "a", "b", "c", "b" }.IndexOf("b"));
+                Assert.AreEqual(1, Array.IndexOf(new[] { "a", "b", "c", "b" }, "b"));
             }
 
             [Test]
@@ -286,7 +297,7 @@ namespace Bridge.ClientTest
             [Test]
             public void IndexOfWithStartIndexWorks()
             {
-                Assert.AreEqual(3, new[] { "a", "b", "c", "b" }.IndexOf("b", 2));
+                Assert.AreEqual(3, Array.IndexOf(new[] { "a", "b", "c", "b" }, "b", 2));
             }
 
             [Test]
@@ -435,6 +446,26 @@ namespace Bridge.ClientTest
                 Assert.AreEqual("xy", result);
             }
 
+            #region System.Collections.ICollection
+            /// <summary>
+            /// Tests System.Collections.ICollection inherited members to
+            /// System.Array (public members).
+            /// </summary>
+            [Test]
+            public void ICollectionNonGenericInterface()
+            {
+                Array a = new[] { 1, 2, 3 };
+
+                // We expect it to return the same array reference -- because
+                // an array reference is effectively the root of an array.
+                Assert.AreEqual(a, a.SyncRoot, "ICollection's SyncRoot returns the same array reference.");
+
+                // By design, this is always false.
+                Assert.False(a.IsSynchronized, "ICollection's IsSynchronized returns false.");
+            }
+            #endregion System.Collections.ICollections
+
+            #region System.Collections.Generic.ICollection
             [Test]
             public void ICollectionCountWorks()
             {
@@ -532,6 +563,21 @@ namespace Bridge.ClientTest
                 Assert.Throws<NotSupportedException>(() => l.Remove("y"));
                 Assert.AreDeepEqual(new[] { "x", "y", "z" }, l);
             }
+            #endregion System.Collections.Generic.ICollection
+
+            #region System.Collections.IList
+            /// <summary>
+            /// Tests System.Collections.IList inherited members to
+            /// System.Array
+            /// </summary>
+            [Test]
+            public void IListNonGenericInterface()
+            {
+                Array a = new[] { 1, 2, 3 };
+
+                Assert.True(a.IsFixedSize, "IList's IsFixedSize returns true.");
+            }
+            #endregion System.Collections.IList
 
             [Test]
             public void IReadOnlyCollectionCountWorks_SPI_1626()
@@ -633,6 +679,19 @@ namespace Bridge.ClientTest
                 var arr3 = new[] { 9, 8, 7, 6 };
                 Array.Copy(arr1, 3, arr3, 2, 1);
                 Assert.AreEqual(new[] { 9, 8, 4, 6 }, arr3);
+            }
+
+            [Test]
+            public void CopyWithDifferentArraysLongWorks()
+            {
+                var arr1 = new[] { 1, 2, 3, 4 };
+                var arr2 = new[] { 9, 8, 7, 6 };
+                Array.Copy(arr1, arr2, (long)2);
+                Assert.AreEqual(new[] { 1, 2, 7, 6 }, arr2, "Array.Copy({1,2,3,4}, {9,8,7,6}, (long)2) results in {1,2,7,6}.");
+
+                var arr3 = new[] { 9, 8, 7, 6 };
+                Array.Copy(arr1, (long)3, arr3, (long)2, (long)1);
+                Assert.AreEqual(new[] { 9, 8, 4, 6 }, arr3, "Array.Copy({1,2,3,4}, (long)3, {9,8,7,6}, (long)2, (long)1) results in {9,8,4,6}.");
             }
 
             [Test]

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using ICSharpCode.NRefactory.TypeSystem;
+using ICSharpCode.NRefactory.CSharp;
 
 namespace Bridge.Translator
 {
@@ -56,7 +57,23 @@ namespace Bridge.Translator
             {
                 var line = region.BeginLine;
                 var column = region.BeginColumn;
-                var point = string.Format("/*##|{0},{1},{2}|##*/", this.Emitter.SourceFileNameIndex, line, column);
+                var idx = this.Emitter.SourceFileNameIndex;
+
+                if (this.Emitter.TypeInfo.TypeDeclaration.HasModifier(ICSharpCode.NRefactory.CSharp.Modifiers.Partial))
+                {
+                    var fn = this.Emitter.Translator.EmitNode.GetParent<SyntaxTree>().FileName;
+
+                    if (fn != null && fn.Length > 0)
+                    {
+                        idx = this.Emitter.SourceFiles.IndexOf(fn);
+
+                        if (idx == -1)
+                        {
+                            idx = this.Emitter.SourceFileNameIndex;
+                        }
+                    }
+                }
+                var point = string.Format("/*##|{0},{1},{2}|##*/", idx, line, column);
 
                 if (this.Emitter.LastSequencePoint != point)
                 {
@@ -98,6 +115,24 @@ namespace Bridge.Translator
         {
             this.Outdent();
             this.WriteCloseBrace();
+        }
+
+        /// <summary>
+        /// Used to write simple blocks. Optionally doesn't end the block with a newline.
+        /// </summary>
+        /// <param name="what"></param>
+        /// <param name="newline"></param>
+        public virtual void WriteBlock(string what, bool newline = true)
+        {
+            this.BeginBlock();
+            this.Write(what);
+            this.WriteNewLine();
+            this.EndBlock();
+
+            if (newline)
+            {
+                this.WriteNewLine();
+            }
         }
 
         public virtual void Write(object value)
@@ -170,9 +205,18 @@ namespace Bridge.Translator
             {
                 s = emitter.ToJavaScript((int)(char)value);
             }
-            else if (value is decimal)
+            else if (value is decimal d)
             {
-                s = JS.Types.SYSTEM_DECIMAL + "(" + AbstractEmitterBlock.DecimalConstant((decimal)value, emitter) + ")";
+                var tmp = d.ToString(CultureInfo.InvariantCulture);
+                s = JS.Types.SYSTEM_DECIMAL + "(" + AbstractEmitterBlock.DecimalConstant(d, emitter);
+
+                int dot;
+                if ((dot = tmp.IndexOf(".")) >= 0)
+                {
+                    s += ", " + tmp.Substring(dot + 1).Length;
+                }
+
+                s += ")";
             }
             else if (value is long)
             {
@@ -653,6 +697,23 @@ namespace Bridge.Translator
         public virtual string WriteIndentToString(string value)
         {
             return WriteIndentToString(value, this.Level);
+        }
+
+        public static string UpdateIndentsInString(string value, int level)
+        {
+            StringBuilder output = new StringBuilder();
+
+            for (var i = 0; i < level; i++)
+            {
+                output.Append(Bridge.Translator.Emitter.INDENT);
+            }
+
+            string indent = output.ToString();
+
+            return Regex.Replace(value, "^(\\s*)(.*)$", (m) =>
+            {
+                return indent + m.Groups[2].Value;
+            }, RegexOptions.Multiline);
         }
 
         public static string WriteIndentToString(string value, int level)

@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using Bridge;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace System
@@ -8,15 +6,15 @@ namespace System
     /// <summary>
     /// The Guid data type which is mapped to the string type in Javascript.
     /// </summary>
-    [Immutable]
+    [Bridge.Immutable]
     public struct Guid : IEquatable<Guid>, IComparable<Guid>, IFormattable
     {
         private const string error1 = "Byte array for GUID must be exactly {0} bytes long";
 
-        private static readonly Regex Valid = new Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase);
-        private static readonly Regex Split = new Regex("^(.{8})(.{4})(.{4})(.{4})(.{12})$");
-        private static readonly Regex NonFormat = new Regex("^[{(]?([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})[)}]?$", RegexOptions.IgnoreCase);
-        private static readonly Regex Replace = new Regex("-");
+        private static readonly RegExp Valid = new RegExp("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "i");
+        private static readonly RegExp Split = new RegExp("^(.{8})(.{4})(.{4})(.{4})(.{12})$");
+        private static readonly RegExp NonFormat = new RegExp("^[{(]?([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})[)}]?$", "i");
+        private static readonly RegExp Replace = new RegExp("-", "g");
         private static readonly Random Rnd = new Random();
 
         /// <summary>
@@ -90,6 +88,7 @@ namespace System
         /// <param name="i">The next byte of the GUID.</param>
         /// <param name="j">The next byte of the GUID.</param>
         /// <param name="k">The next byte of the GUID.</param>
+        [CLSCompliant(false)]
         public Guid(uint a, ushort b, ushort c, byte d, byte e, byte f, byte g, byte h, byte i, byte j, byte k)
         {
             _a = (int)a;
@@ -380,16 +379,16 @@ namespace System
 
             if (string.IsNullOrEmpty(format))
             {
-                var m = NonFormat.Match(input);
+                var m = NonFormat.Exec(input);
 
-                if (m.Success)
+                if (m != null)
                 {
                     List<string> list = new List<string>();
-                    for (int i = 1; i <= m.Groups.Count; i++)
+                    for (int i = 1; i <= m.Length; i++)
                     {
-                        if (m.Groups[i].Success)
+                        if (m[i] != null)
                         {
-                            list.Add(m.Groups[i].Value);
+                            list.Add(m[i]);
                         }
                     }
 
@@ -404,16 +403,16 @@ namespace System
 
                 if (format == "N")
                 {
-                    var m = Split.Match(input);
+                    var m = Split.Exec(input);
 
-                    if (m.Success)
+                    if (m != null)
                     {
                         List<string> list = new List<string>();
-                        for (int i = 1; i <= m.Groups.Count; i++)
+                        for (int i = 1; i <= m.Length; i++)
                         {
-                            if (m.Groups[i].Success)
+                            if (m[i] != null)
                             {
-                                list.Add(m.Groups[i].Value);
+                                list.Add(m[i]);
                             }
                         }
 
@@ -436,7 +435,7 @@ namespace System
                     p = true;
                 }
 
-                if (p && Guid.Valid.IsMatch(input))
+                if (p && Guid.Valid.Test(input))
                 {
                     r = input.ToLower();
                 }
@@ -458,26 +457,25 @@ namespace System
 
         private string Format(string format)
         {
-            var s = ((uint)_a).ToString("x8") + ((ushort)_b).ToString("x4") + ((ushort)_c).ToString("x4");
-            s = s + (new[] { _d, _e, _f, _g, _h, _i, _j, _k }).Map(MakeBinary).Join("");
+            var s = ToHex((uint)_a, 8) + ToHex((ushort)_b, 4) + ToHex((ushort)_c, 4);
+            s = s + (new[] { _d, _e, _f, _g, _h, _i, _j, _k }).Map(ToHex).Join("");
 
-            var m = Guid.Split.Match(s);
-            List<string> list = new List<string>();
-            for (int i = 1; i <= m.Groups.Count; i++)
+            var m = Bridge.Script.Write<string[]>("/^(.{8})(.{4})(.{4})(.{4})(.{12})$/.exec(s)");
+            string[] list = new string[0];
+            for (int i = 1; i < m.Length; i++)
             {
-                if (m.Groups[i].Success)
+                if (m[i] != null)
                 {
-                    list.Add(m.Groups[i].Value);
+                    list.Push(m[i]);
                 }
             }
-            s = list.ToArray().Join("-");
+            s = list.Join("-");
 
             switch (format)
             {
                 case "n":
                 case "N":
-                    return Guid.Replace.Replace(s, "");
-
+                    return s.ToDynamic().replace(Guid.Replace, "");
                 case "b":
                 case "B":
                     return '{' + s + '}';
@@ -491,9 +489,29 @@ namespace System
             }
         }
 
-        private static string MakeBinary(byte x)
+        private static string ToHex(uint x, int precision)
         {
-            return (x & 0xff).ToString("x2");
+            var result = Bridge.Script.Call<string>("x.toString", 16);
+            precision -= result.Length;
+
+            for (var i = 0; i < precision; i++)
+            {
+                result = "0" + result;
+            }
+
+            return result;
+        }
+
+        private static string ToHex(byte x)
+        {
+            var result = Bridge.Script.Call<string>("x.toString", 16);
+
+            if (result.Length == 1)
+            {
+                result = "0" + result;
+            }
+
+            return result;
         }
 
         private void FromString(string s)
@@ -503,7 +521,7 @@ namespace System
                 return;
             }
 
-            s = Guid.Replace.Replace(s, "");
+            s = s.ToDynamic().replace(Guid.Replace, "");
 
             var r = new byte[8];
 

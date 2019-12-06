@@ -12,10 +12,10 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>A C# to JavaScript compiler. Write modern mobile and web apps in C#. Run them anywhere with JavaScript.</description>
     <summary>A C# to JavaScript compiler. Write modern mobile and web apps in C#. Run them anywhere in JavaScript with Bridge.NET.</summary>
-    <copyright>Copyright (c) 2008-2017, Object.NET, Inc. (http://object.net/). All rights reserved.</copyright>
+    <copyright>Copyright (c) 2008-2019, Object.NET, Inc. (http://object.net/). All rights reserved.</copyright>
     <tags>bridge bridge.net bridge js javascript C# csharp mobile ios asp.net aspnet mvc aspnetmvc web transpiler compiler object.net</tags>
     <dependencies>
-      <dependency id="Bridge.Core" version="16.5.0" />
+      <dependency id="Bridge.Core" version="17.10.1" />
     </dependencies>
     <frameworkAssemblies>
     </frameworkAssemblies>
@@ -28,7 +28,7 @@
     <file src="../../.build/files/Bridge.Min.targets" target="build/Bridge.Min.targets" />
 
     <!--tools-->
-    <file src="../../Compiler/Build/bin/Release/Bridge.Build.dll" target="tools/Bridge.Builder.v16.dll" />
+    <file src="../../Compiler/Build/bin/Release/Bridge.Build.dll" target="tools/Bridge.Builder.v17.dll" />
     <file src="../../Compiler/Build/bin/Release/Bridge.Contract.dll" target="tools/Bridge.Contract.dll" />
     <file src="../../Compiler/Build/bin/Release/Bridge.Translator.dll" target="tools/Bridge.Translator.dll" />
     <file src="../../Compiler/Builder/bin/Release/bridge.exe" target="tools/bridge.exe" />
@@ -65,10 +65,15 @@
     <file src="../../Compiler/Build/bin/Release/System.Text.Encoding.CodePages.dll" target="tools/System.Text.Encoding.CodePages.dll" />
     <file src="../../Compiler/Translator/bin/Release/System.Threading.Thread.dll" target="tools/System.Threading.Thread.dll" />
     <file src="../../Compiler/Build/bin/Release/System.ValueTuple.dll" target="tools/System.ValueTuple.dll" />
-    <file src="../../Compiler/Build/bin/Release/System.Xml.ReaderWriter.dll" target="tools/System.Xml.ReaderWriter.dll" />
+    <file src="../../Compiler/Translator/bin/Release/System.Xml.ReaderWriter.dll" target="tools/System.Xml.ReaderWriter.dll" />
     <file src="../../Compiler/Translator/bin/Release/System.Xml.XmlDocument.dll" target="tools/System.Xml.XmlDocument.dll" />
     <file src="../../Compiler/Translator/bin/Release/System.Xml.XPath.dll" target="tools/System.Xml.XPath.dll" />
     <file src="../../Compiler/Translator/bin/Release/System.Xml.XPath.XDocument.dll" target="tools/System.Xml.XPath.XDocument.dll" />
     <file src="../../Compiler/Build/bin/Release/TopologicalSorting.dll" target="tools/TopologicalSorting.dll" />
+    <file src="../../Compiler/Translator/bin/Release/Microsoft.Build.dll" target="tools/Microsoft.Build.dll" />
+    <file src="../../Compiler/Translator/bin/Release/Microsoft.Build.Framework.dll" target="tools/Microsoft.Build.Framework.dll" />
+    <file src="../../Compiler/Translator/bin/Release/Microsoft.Build.Utilities.Core.dll" target="tools/Microsoft.Build.Utilities.Core.dll" />
+    <file src="../../Compiler/Translator/bin/Release/System.Threading.Tasks.Dataflow.dll" target="tools/System.Threading.Tasks.Dataflow.dll" />
+    <file src="../../Compiler/Translator/bin/Release/System.Runtime.InteropServices.RuntimeInformation.dll" target="tools/System.Runtime.InteropServices.RuntimeInformation.dll" />
   </files>
 </package>

@@ -80,7 +80,7 @@
             public const string ASYNC_BODY = "$asyncBody";
             public const string ASYNC_YIELD_BODY = "moveNext";
             public const string GET_AWAITED_RESULT = "getAwaitedResult";
-            public const string CONTINUE_WITH = "continueWith";
+            public const string CONTINUE_WITH = "continue";
             public const string SET_RESULT = "setResult";
             public const string SET_EXCEPTION = "setException";
 
@@ -89,7 +89,7 @@
             public const string APPLY = "apply";
             public const string CALL = "call";
             public const string DEFINE = "define";
-            public const string DISPOSE = "System$IDisposable$dispose";
+            public const string DISPOSE = "System$IDisposable$Dispose";
 
             public const string SLICE = "slice";
 
@@ -197,8 +197,8 @@
                     private const string DOTNAME = NAME + ".";
                     public const string NAME = System.DOTNAME + "IDisposable";
 
-                    public const string DISPOSE = "dispose";
-                    public const string INTERFACE_DISPOSE = "System$IDisposable$dispose";
+                    public const string DISPOSE = "Dispose";
+                    public const string INTERFACE_DISPOSE = "System$IDisposable$Dispose";
                 }
 
                 public class Array
@@ -329,6 +329,7 @@
             public const string ENUMERATOR = "$enumerator";
             public const string EXPORTS = "$exports";
             public const string SCOPE = "$scope";
+            public const string MODULE = "$module";
             public const string ITERATOR = "$i";
 
             public const string ASYNC_TASK = "$task";

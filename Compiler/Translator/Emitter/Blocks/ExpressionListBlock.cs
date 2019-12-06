@@ -52,6 +52,12 @@ namespace Bridge.Translator
             set;
         }
 
+        public bool IgnoreExpandParams
+        {
+            get;
+            set;
+        }
+
         protected override void DoEmit()
         {
             var oldIsAssignment = this.Emitter.IsAssignment;
@@ -67,11 +73,11 @@ namespace Bridge.Translator
         {
             bool needComma = false;
             int count = this.Emitter.Writers.Count;
-            bool wrapByBrackets = true;
+            bool wrapByBrackets = !this.IgnoreExpandParams;
             bool expandParams = false;
             bool isApply = false;
 
-            if (paramArg != null && this.InvocationExpression != null)
+            if (paramArg != null && this.InvocationExpression != null && !this.IgnoreExpandParams)
             {
                 var rr = this.Emitter.Resolver.ResolveNode(this.InvocationExpression, this.Emitter) as CSharpInvocationResolveResult;
                 if (rr != null)
@@ -126,10 +132,14 @@ namespace Bridge.Translator
                         }
 
                         var pos = this.OpenBracketPosition;
-                        this.Emitter.Output.Insert(pos, "." + JS.Funcs.APPLY);
-                        pos += 7;
 
-                        this.Emitter.Output.Insert(pos, scope + ", " + (needConcat ? "[" : ""));
+                        if (pos > -1)
+                        {
+                            this.Emitter.Output.Insert(pos, "." + JS.Funcs.APPLY);
+                            pos += 7;
+
+                            this.Emitter.Output.Insert(pos, scope + ", " + (needConcat ? "[" : ""));
+                        }
                     }
 
                     isApply = needConcat;
@@ -172,19 +182,26 @@ namespace Bridge.Translator
 
                     if (byReferenceResolveResult != null && !(byReferenceResolveResult.ElementResult is LocalResolveResult))
                     {
-                        this.Write(JS.Funcs.BRIDGE_REF + "(");
-
-                        this.Emitter.IsRefArg = true;
-                        expr.AcceptVisitor(this.Emitter);
-                        this.Emitter.IsRefArg = false;
-
-                        if (this.Emitter.Writers.Count != count)
+                        if (byReferenceResolveResult.ElementResult is MemberResolveResult mr && mr.Member.FullName == "Bridge.Ref.Value" && directExpr.Expression is MemberReferenceExpression mre)
                         {
-                            this.PopWriter();
-                            count = this.Emitter.Writers.Count;
+                            mre.Target.AcceptVisitor(this.Emitter);
                         }
+                        else
+                        {
+                            this.Write(JS.Funcs.BRIDGE_REF + "(");
 
-                        this.Write(")");
+                            this.Emitter.IsRefArg = true;
+                            expr.AcceptVisitor(this.Emitter);
+                            this.Emitter.IsRefArg = false;
+
+                            if (this.Emitter.Writers.Count != count)
+                            {
+                                this.PopWriter();
+                                count = this.Emitter.Writers.Count;
+                            }
+
+                            this.Write(")");
+                        }
 
                         continue;
                     }

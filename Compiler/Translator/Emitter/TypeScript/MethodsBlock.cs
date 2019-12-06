@@ -44,9 +44,15 @@ namespace Bridge.Translator.TypeScript
         protected virtual void EmitMethods(Dictionary<string, List<MethodDeclaration>> methods, Dictionary<string, List<EntityDeclaration>> properties, Dictionary<OperatorType, List<OperatorDeclaration>> operators)
         {
             var names = new List<string>(properties.Keys);
+            var fields = this.StaticBlock ? this.TypeInfo.StaticConfig.Fields : this.TypeInfo.InstanceConfig.Fields;
 
             foreach (var name in names)
             {
+                if (fields.Any(f => f.Name == name))
+                {
+                    continue;
+                }
+
                 var props = properties[name];
 
                 foreach (var prop in props)
@@ -118,12 +124,7 @@ namespace Bridge.Translator.TypeScript
         protected virtual void EmitStructMethods()
         {
             var typeDef = this.Emitter.GetTypeDefinition();
-            string structName = this.Emitter.Validator.GetCustomTypeName(typeDef, this.Emitter, false);
-
-            if (structName.IsEmpty())
-            {
-                structName = BridgeTypes.ToJsName(this.TypeInfo.Type, this.Emitter);
-            }
+            string structName = BridgeTypes.ToTypeScriptName(this.TypeInfo.Type, this.Emitter);
 
             if (this.TypeInfo.InstanceConfig.Fields.Count == 0)
             {
@@ -142,7 +143,7 @@ namespace Bridge.Translator.TypeScript
             {
                 this.Write(JS.Funcs.GETHASHCODE + "()");
                 this.WriteColon();
-                this.Write(structName);
+                this.Write("number");
                 this.WriteSemiColon();
                 this.WriteNewLine();
             }
@@ -154,7 +155,7 @@ namespace Bridge.Translator.TypeScript
                 this.Write(structName);
                 this.WriteCloseParentheses();
                 this.WriteColon();
-                this.Write(JS.Types.BOOLEAN);
+                this.Write("boolean");
                 this.WriteSemiColon();
                 this.WriteNewLine();
             }

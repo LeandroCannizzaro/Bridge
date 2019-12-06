@@ -1,7 +1,7 @@
 ﻿using Bridge;
 using System;
+using System.Collections.Generic;
 using System.Linq;
-
 
 namespace Test.BridgeIssues.N697
 {
@@ -48,8 +48,23 @@ namespace Test.BridgeIssues.N697
             // don't get it if you call DOM.Div(null, "Item1", "Item2"), so we don't want it in most cases here either - to achieve this, we prepare an arguments
             // array and pass that to React.createElement in an "apply" call. Similar techniques are used in the stateful component.
             Array createElementArgs = new object[] { reactStatelessRenderFunction, ComponentHelpers<TProps>.WrapProps(props) };
+
             if (children != null)
-                createElementArgs = createElementArgs.Concat(children);
+            {
+                var tempList = new List<object>();
+                foreach (var entry in createElementArgs)
+                {
+                    tempList.Add(entry);
+                }
+
+                foreach (var entry in children)
+                {
+                    tempList.Add(entry);
+                }
+
+                createElementArgs = tempList.ToArray();
+            }
+
             _reactElement = Script.Write<ReactElement>("React.createElement.apply(null, createElementArgs)");
         }
 
@@ -63,14 +78,14 @@ namespace Test.BridgeIssues.N697
             // would not get called on the component, but that's just the same as for stateful components (from the Component class).
             var fullClassName = this.GetType().FullName;
             /*@
-			var classPrototype;
-			eval('classPrototype = ' + fullClassName + '.prototype');
-			var scopeBoundFunction = function(props) {
-				var target = Object.create(classPrototype);
-				target.props = props;
-				return target.render.apply(target, []);
-			}
-			*/
+            var classPrototype;
+            eval('classPrototype = ' + fullClassName + '.prototype');
+            var scopeBoundFunction = function(props) {
+                var target = Object.create(classPrototype);
+                target.props = props;
+                return target.render.apply(target, []);
+            }
+            */
 
             // We have an anonymous function for the renderer now but it would better to name it, since React Dev Tools will use show the function name (if defined) as
             // the component name in the tree. The only way to do this is, unfortunately, with eval - but the only dynamic content is the class name (which should be
@@ -79,8 +94,8 @@ namespace Test.BridgeIssues.N697
             var className = fullClassName.Split('.').Last();
             Func<TProps, ReactElement> namedScopeBoundFunction = null;
             /*@
-			eval("namedScopeBoundFunction = function " + className + "(props) { return scopeBoundFunction(props); };");
-			*/
+            eval("namedScopeBoundFunction = function " + className + "(props) { return scopeBoundFunction(props); };");
+            */
             return namedScopeBoundFunction;
         }
 

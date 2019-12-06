@@ -3,6 +3,7 @@ using Bridge.Contract.Constants;
 using ICSharpCode.NRefactory.CSharp;
 using ICSharpCode.NRefactory.Semantics;
 using ICSharpCode.NRefactory.TypeSystem;
+using Newtonsoft.Json;
 using Object.Net.Utilities;
 using System;
 using System.Collections.Generic;
@@ -61,6 +62,7 @@ namespace Bridge.Translator
                 this.BeginBlock();
 
                 new MethodBlock(this.Emitter, this.TypeInfo, true).Emit();
+                this.EmitMetadata();
 
                 this.WriteNewLine();
                 this.EndBlock();
@@ -159,6 +161,12 @@ namespace Bridge.Translator
 
             if (this.IsGeneric)
             {
+                if (this.TypeInfo.Module != null)
+                {
+                    this.Write(this.TypeInfo.Module.Name);
+                    this.Write(", ");
+                }
+
                 this.WriteFunction();
                 this.WriteOpenParentheses();
 
@@ -213,14 +221,33 @@ namespace Bridge.Translator
             }
 
             this.WriteKind();
+            this.EmitMetadata();
             this.WriteObjectLiteral();
 
             if (this.TypeInfo.Module != null)
             {
                 this.WriteScope();
+                this.WriteModule();
             }
 
             this.WriteVariance();
+        }
+
+        protected virtual void EmitMetadata()
+        {
+            if ((this.Emitter.HasModules || this.Emitter.AssemblyInfo.Reflection.Target == MetadataTarget.Type) && this.Emitter.ReflectableTypes.Any(t => t == this.Emitter.TypeInfo.Type))
+            {
+                var meta = MetadataUtils.ConstructTypeMetadata(this.TypeInfo.Type.GetDefinition(), this.Emitter, false, this.TypeInfo.TypeDeclaration.GetParent<SyntaxTree>());
+
+                if (meta != null)
+                {
+                    this.EnsureComma();
+                    this.Write("$metadata : function () { return ");
+                    this.Write(meta.ToString(Formatting.None));
+                    this.Write("; }");
+                    this.Emitter.Comma = true;
+                }
+            }
         }
 
         private void WriteTopInitMethods()
@@ -295,16 +322,28 @@ namespace Bridge.Translator
             this.Emitter.Comma = true;
         }
 
+        protected virtual void WriteModule()
+        {
+            this.EnsureComma();
+            this.Write(JS.Vars.MODULE);
+            this.WriteColon();
+            this.WriteScript(this.TypeInfo.Module.Name);
+            this.Emitter.Comma = true;
+        }
+
         protected virtual void WriteKind()
         {
-            if (this.TypeInfo.Type.Kind != TypeKind.Class)
+            var isNested = this.TypeInfo.Type.DeclaringType != null;
+            if (this.TypeInfo.Type.Kind == TypeKind.Class && !isNested)
             {
-                this.EnsureComma();
-                this.Write(JS.Fields.KIND);
-                this.WriteColon();
-                this.WriteScript(this.TypeInfo.Type.Kind.ToString().ToLowerInvariant());
-                this.Emitter.Comma = true;
+                return;
             }
+
+            this.EnsureComma();
+            this.Write(JS.Fields.KIND);
+            this.WriteColon();
+            this.WriteScript( (isNested ? "nested " : "") + this.TypeInfo.Type.Kind.ToString().ToLowerInvariant());
+            this.Emitter.Comma = true;
         }
 
         protected virtual void WriteObjectLiteral()

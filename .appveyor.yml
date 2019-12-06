@@ -9,7 +9,7 @@
 #---------------------------------#
 
 # version format
-version: 16.5.0.{build}-{branch}
+version: 17.10.1.{build}-{branch}
 
 # branches to build
 #branches:
@@ -29,7 +29,7 @@ skip_tags: true
 #---------------------------------#
 
 # Operating system (build VM template)
-os: Visual Studio 2015 RC
+os: Visual Studio 2019
 
 # scripts that are called at very beginning, before repo cloning
 init:
@@ -57,7 +57,8 @@ cache:
 # scripts that run after cloning repository
 install:
 #  - ps: (New-Object Net.WebClient).DownloadFile('https://dist.nuget.org/win-x86-commandline/v3.5.0/nuget.exe', 'c:\projects\Bridge\nuget\nuget.exe')
-  - cmd: nuget sources add -Name NuGetV3 -Source  https://api.nuget.org/v3/index.json
+#  - cmd: nuget sources add -Name NuGetV3 -Source  https://api.nuget.org/v3/index.json
+
 #  - cmd: git.exe clone -q --progress -v  --depth 20 --branch=master "https://github.com/bridgedotnet/Frameworks" "c:\projects\Frameworks"
 #  - cmd: git.exe clone -q --progress -v  --depth 20 --branch=master "https://github.com/bridgedotnet/Testing" "c:\projects\Testing"
 
@@ -210,7 +211,7 @@ notifications:
   - provider: Slack
     auth_token:
       secure: 2g1as+FdSYJM0dzLEBkosu66Q/9U8ncGWUd7IcAfWXViqG9X7eKMkOt3ai4JRcb+9k+2BW8Aewdt6tp3dOD27SB+rJZzoNeUjA1SCk8nbaM=
-    channel: 'bridge-github'
+    channel: '#bridge-meta'
     on_build_status_changed: true
     on_build_success: true
     on_build_failure: true

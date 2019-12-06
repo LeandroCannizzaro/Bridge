@@ -18,6 +18,16 @@ namespace Bridge.Translator
 
         }
 
+        public string TemplateModifier
+        {
+            get; set;
+        }
+
+        public bool HasModules
+        {
+            get; set;
+        }
+
         public Dictionary<AnonymousType, IAnonymousTypeConfig> AnonymousTypes
         {
             get
@@ -864,6 +874,19 @@ namespace Bridge.Translator
             }
         }
 
+        public string Tag
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+
+            set
+            {
+                throw new NotImplementedException();
+            }
+        }
+
         public Dictionary<string, bool> TempVariables
         {
             get
@@ -983,6 +1006,8 @@ namespace Bridge.Translator
                 throw new NotImplementedException();
             }
         }
+
+        public int WrapRestCounter { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
         public int CompareTypeInfosByName(ITypeInfo x, ITypeInfo y)
         {

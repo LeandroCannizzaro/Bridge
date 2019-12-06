@@ -10,6 +10,12 @@ namespace Bridge.Translator
 {
     public partial class Emitter : Visitor
     {
+        public string Tag
+        {
+            get;
+            set;
+        }
+
         public EmitterCache Cache
         {
             get;
@@ -558,6 +564,21 @@ namespace Bridge.Translator
         }
 
         public CompilerRule Rules
+        {
+            get; set;
+        }
+
+        public bool HasModules
+        {
+            get; set;
+        }
+
+        public string TemplateModifier
+        {
+            get; set;
+        }
+
+        public int WrapRestCounter
         {
             get; set;
         }

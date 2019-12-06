@@ -244,11 +244,11 @@ namespace Bridge.Translator
 
             for (int i = 0; i < this.AwaitExpressions.Length; i++)
             {
-                if(this.AwaitExpressions[i] is Expression)
+                if (this.AwaitExpressions[i] is Expression)
                 {
                     this.Emitter.AsyncVariables.Add(JS.Vars.ASYNC_TASK + (i + 1));
 
-                    if(this.IsTaskResult((Expression)this.AwaitExpressions[i]))
+                    if (this.IsTaskResult((Expression)this.AwaitExpressions[i]))
                     {
                         this.Emitter.AsyncVariables.Add(JS.Vars.ASYNC_TASK_RESULT + (i + 1));
                     }
@@ -364,7 +364,7 @@ namespace Bridge.Translator
             if (this.Emitter.AsyncBlock.MethodDeclaration != null &&
                 !this.Emitter.AsyncBlock.MethodDeclaration.HasModifier(Modifiers.Async))
             {
-                this.Write("return ");    
+                this.Write("return ");
             }
 
             this.Write(JS.Funcs.ASYNC_BODY + "();");
@@ -416,7 +416,7 @@ namespace Bridge.Translator
             var writer = this.SaveWriter();
             this.AddAsyncStep();
 
-            if (this.Body.Parent is LambdaExpression && this.Body is Expression && this.IsTaskReturn)
+            if (this.Body.Parent is LambdaExpression && this.Body is Expression && this.IsTaskReturn && this.ReturnType.FullName == "System.Threading.Tasks.Task" && this.ReturnType.TypeParameterCount > 0)
             {
                 new ReturnBlock(this.Emitter, (Expression)this.Body).Emit();
             }

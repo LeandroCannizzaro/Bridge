@@ -160,9 +160,26 @@ namespace Bridge.Translator
             bool isLongExpected = Helpers.Is64Type(expectedType, this.Emitter.Resolver);
             bool isUserOperator = this.IsUserOperator(orr);
 
-            bool isUint = rr.Type.IsKnownType(KnownTypeCode.UInt16) ||
-                          rr.Type.IsKnownType(KnownTypeCode.UInt32) ||
-                          rr.Type.IsKnownType(KnownTypeCode.UInt64);
+            var rrType = rr.Type;
+
+            if (rrType.Kind == TypeKind.Enum)
+            {
+                rrType = rrType.GetDefinition().EnumUnderlyingType;
+            }
+
+            bool isUint = rrType.IsKnownType(KnownTypeCode.UInt16) ||
+                          rrType.IsKnownType(KnownTypeCode.UInt32) ||
+                          rrType.IsKnownType(KnownTypeCode.UInt64);
+
+            if (!isLong && rr.Type.Kind == TypeKind.Enum && Helpers.Is64Type(rr.Type.GetDefinition().EnumUnderlyingType, this.Emitter.Resolver))
+            {
+                isLong = true;
+            }
+
+            if (!isLongExpected && expectedType.Kind == TypeKind.Enum && Helpers.Is64Type(expectedType.GetDefinition().EnumUnderlyingType, this.Emitter.Resolver))
+            {
+                isLongExpected = true;
+            }
 
             var charToString = -1;
 
@@ -563,7 +580,9 @@ namespace Bridge.Translator
                             break;
 
                         case AssignmentOperatorType.ExclusiveOr:
-                            this.Write("^");
+                            if (!isBool) {
+                                this.Write("^");
+                            }
                             break;
 
                         case AssignmentOperatorType.Modulus:
@@ -666,11 +685,29 @@ namespace Bridge.Translator
                 this.WriteComma();
             }
 
-            if (!special && isBool && (assignmentExpression.Operator == AssignmentOperatorType.BitwiseAnd || assignmentExpression.Operator == AssignmentOperatorType.BitwiseOr))
+            if (!special && isBool && (assignmentExpression.Operator == AssignmentOperatorType.BitwiseAnd || assignmentExpression.Operator == AssignmentOperatorType.BitwiseOr || assignmentExpression.Operator == AssignmentOperatorType.ExclusiveOr))
             {
-                this.Write("!!(");
+                if (assignmentExpression.Operator != AssignmentOperatorType.ExclusiveOr)
+                {
+                    this.Write("!!(");
+                }
+
                 assignmentExpression.Left.AcceptVisitor(this.Emitter);
-                this.Write(assignmentExpression.Operator == AssignmentOperatorType.BitwiseAnd ? " & " : " | ");
+
+                string op = null;
+                switch(assignmentExpression.Operator)
+                {
+                    case AssignmentOperatorType.BitwiseAnd:
+                        op = " & ";
+                        break;
+                    case AssignmentOperatorType.BitwiseOr:
+                        op = " | ";
+                        break;
+                    case AssignmentOperatorType.ExclusiveOr:
+                        op = " != ";
+                        break;
+                }
+                this.Write(op);
             }
 
             oldValue = this.Emitter.ReplaceAwaiterByVar;
@@ -781,7 +818,15 @@ namespace Bridge.Translator
                 if (proto && prop != null && prop.SetMethod == null)
                 {
                     var name = OverloadsCollection.Create(this.Emitter, mrr.Member).GetOverloadName();
-                    this.Write(JS.Types.Bridge.ENSURE_BASE_PROPERTY + "(this, \"" + name + "\")");
+                    this.Write(JS.Types.Bridge.ENSURE_BASE_PROPERTY + "(this, \"" + name + "\"");
+
+                    if (this.Emitter.Validator.IsExternalType(property.DeclaringTypeDefinition) && !this.Emitter.Validator.IsBridgeClass(property.DeclaringTypeDefinition))
+                    {
+                        this.Write(", \"" + BridgeTypes.ToJsName(property.DeclaringType, this.Emitter, isAlias: true) + "\"");
+                    }
+
+                    this.Write(")");
+
                     this.WriteDot();
                     var alias = BridgeTypes.ToJsName(mrr.Member.DeclaringType, this.Emitter, isAlias: true);
                     if (alias.StartsWith("\""))

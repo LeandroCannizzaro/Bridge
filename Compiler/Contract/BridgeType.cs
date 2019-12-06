@@ -306,7 +306,7 @@ namespace Bridge.Contract
             return globalTarget;
         }
 
-        public static string ToJsName(IType type, IEmitter emitter, bool asDefinition = false, bool excludens = false, bool isAlias = false, bool skipMethodTypeParam = false, bool removeScope = true, bool nomodule = false, bool ignoreLiteralName = true, bool ignoreVirtual = false)
+        public static string ToJsName(IType type, IEmitter emitter, bool asDefinition = false, bool excludens = false, bool isAlias = false, bool skipMethodTypeParam = false, bool removeScope = true, bool nomodule = false, bool ignoreLiteralName = true, bool ignoreVirtual = false, bool excludeTypeOnly = false)
         {
             var itypeDef = type.GetDefinition();
             BridgeType bridgeType = emitter.BridgeTypes.Get(type, true);
@@ -337,7 +337,13 @@ namespace Bridge.Contract
 
                 if (arrayType != null && arrayType.ElementType != null)
                 {
-                    var elementAlias = BridgeTypes.ToJsName(arrayType.ElementType, emitter, asDefinition, excludens, isAlias, skipMethodTypeParam);
+                    string typedArrayName;
+                    if (emitter.AssemblyInfo.UseTypedArrays && (typedArrayName = Helpers.GetTypedArrayName(arrayType.ElementType)) != null)
+                    {
+                        return typedArrayName;
+                    }
+
+                    var elementAlias = BridgeTypes.ToJsName(arrayType.ElementType, emitter, asDefinition, excludens, isAlias, skipMethodTypeParam, excludeTypeOnly: excludeTypeOnly);
 
                     if (isAlias)
                     {
@@ -366,7 +372,7 @@ namespace Bridge.Contract
 
             if (type is ByReferenceType)
             {
-                return BridgeTypes.ToJsName(((ByReferenceType)type).ElementType, emitter, asDefinition, excludens, isAlias, skipMethodTypeParam);
+                return BridgeTypes.ToJsName(((ByReferenceType)type).ElementType, emitter, asDefinition, excludens, isAlias, skipMethodTypeParam, excludeTypeOnly: excludeTypeOnly);
             }
 
             if (ignoreLiteralName)
@@ -396,7 +402,7 @@ namespace Bridge.Contract
             var typeParam = type as ITypeParameter;
             if (typeParam != null)
             {
-                if (skipMethodTypeParam && (typeParam.OwnerType == SymbolKind.Method) || Helpers.IsIgnoreGeneric(typeParam.Owner, emitter))
+                if ((skipMethodTypeParam || excludeTypeOnly) && (typeParam.OwnerType == SymbolKind.Method) || Helpers.IsIgnoreGeneric(typeParam.Owner, emitter))
                 {
                     return JS.Types.System.Object.NAME;
                 }
@@ -412,7 +418,7 @@ namespace Bridge.Contract
 
                 if (typeDef.IsNested && !excludens)
                 {
-                    name = BridgeTypes.ToJsName(typeDef.DeclaringType, emitter, true, ignoreVirtual: true);
+                    name = BridgeTypes.ToJsName(typeDef.DeclaringType, emitter, true, ignoreVirtual: true, nomodule: nomodule);
                     isNested = true;
                 }
 
@@ -430,9 +436,16 @@ namespace Bridge.Contract
             }
 
             bool isCustomName = false;
-            if (bridgeType != null && !nomodule)
+            if (bridgeType != null)
             {
-                name = BridgeTypes.AddModule(name, bridgeType, excludens, isNested, out isCustomName);
+                if (nomodule)
+                {
+                    name = GetCustomName(name, bridgeType, excludens, isNested, ref isCustomName, null);
+                }
+                else
+                {
+                    name = BridgeTypes.AddModule(name, bridgeType, excludens, isNested, out isCustomName);
+                }
             }
 
             var tDef = type.GetDefinition();
@@ -454,7 +467,7 @@ namespace Bridge.Contract
                 name = OverloadsCollection.NormalizeInterfaceName(name);
             }
 
-            if (type.TypeArguments.Count > 0 && !Helpers.IsIgnoreGeneric(type, emitter) && !asDefinition)
+            if (type.TypeArguments.Count > 0 && !Helpers.IsIgnoreGeneric(type, emitter) && !asDefinition && !skipMethodTypeParam)
             {
                 if (isAlias)
                 {
@@ -475,7 +488,8 @@ namespace Bridge.Contract
                         }
 
                         needComma = true;
-                        bool needGet = typeArg.Kind == TypeKind.TypeParameter && !asDefinition;
+                        var isTypeParam = typeArg.Kind == TypeKind.TypeParameter;
+                        bool needGet = isTypeParam && !asDefinition && !excludeTypeOnly;
                         if (needGet)
                         {
                             if (!isStr)
@@ -486,7 +500,7 @@ namespace Bridge.Contract
                             sb.Append("\" + " + JS.Types.Bridge.GET_TYPE_ALIAS + "(");
                         }
 
-                        var typeArgName = BridgeTypes.ToJsName(typeArg, emitter, asDefinition, false, true, skipMethodTypeParam, ignoreVirtual:true);
+                        var typeArgName = BridgeTypes.ToJsName(typeArg, emitter, asDefinition, false, true, skipMethodTypeParam, ignoreVirtual:true, excludeTypeOnly: excludeTypeOnly);
 
                         if (!needGet && typeArgName.StartsWith("\""))
                         {
@@ -505,7 +519,7 @@ namespace Bridge.Contract
                                 sb.Insert(0, "\"");
                             }
                         }
-                        else
+                        else if (!isTypeParam || !excludeTypeOnly)
                         {
                             sb.Append(typeArgName);
                         }
@@ -542,7 +556,7 @@ namespace Bridge.Contract
 
                         needComma = true;
 
-                        sb.Append(BridgeTypes.ToJsName(typeArg, emitter, skipMethodTypeParam: skipMethodTypeParam));
+                        sb.Append(BridgeTypes.ToJsName(typeArg, emitter, skipMethodTypeParam: skipMethodTypeParam, excludeTypeOnly: excludeTypeOnly));
                     }
                     sb.Append(")");
                     name = sb.ToString();
@@ -570,9 +584,9 @@ namespace Bridge.Contract
             return name;
         }
 
-        public static string ToJsName(TypeDefinition type, IEmitter emitter, bool asDefinition = false, bool excludens = false, bool ignoreVirtual = false)
+        public static string ToJsName(TypeDefinition type, IEmitter emitter, bool asDefinition = false, bool excludens = false, bool ignoreVirtual = false, bool nomodule = false)
         {
-            return BridgeTypes.ToJsName(ReflectionHelper.ParseReflectionName(BridgeTypes.GetTypeDefinitionKey(type)).Resolve(emitter.Resolver.Resolver.TypeResolveContext), emitter, asDefinition, excludens, ignoreVirtual:ignoreVirtual);
+            return BridgeTypes.ToJsName(ReflectionHelper.ParseReflectionName(BridgeTypes.GetTypeDefinitionKey(type)).Resolve(emitter.Resolver.Resolver.TypeResolveContext), emitter, asDefinition, excludens, ignoreVirtual:ignoreVirtual, nomodule: nomodule);
         }
 
         public static string DefinitionToJsName(IType type, IEmitter emitter, bool ignoreLiteralName = true)
@@ -616,15 +630,23 @@ namespace Bridge.Contract
             var def = type.Type.GetDefinition();
             if (def != null && type.Module == null)
             {
-                if (def.Attributes.Count > 0)
-                {
-                    var attr = def.Attributes.FirstOrDefault(a => a.AttributeType.FullName == "Bridge.ModuleAttribute");
+                var typeDef = def;
 
-                    if (attr != null)
+                do
+                {
+                    if (typeDef.Attributes.Count > 0)
                     {
-                        BridgeTypes.ReadModuleFromAttribute(type, attr);
+                        var attr = typeDef.Attributes.FirstOrDefault(a => a.AttributeType.FullName == "Bridge.ModuleAttribute");
+
+                        if (attr != null)
+                        {
+                            BridgeTypes.ReadModuleFromAttribute(type, attr);
+                        }
                     }
+
+                    typeDef = typeDef.DeclaringTypeDefinition;
                 }
+                while (typeDef != null && type.Module == null);
 
                 if (type.Module == null)
                 {
@@ -653,19 +675,19 @@ namespace Bridge.Contract
 
                 if (obj is bool)
                 {
-                    module = new Module((bool)obj);
+                    module = new Module((bool)obj, type.Emitter);
                 }
                 else if (obj is string)
                 {
-                    module = new Module(obj.ToString());
+                    module = new Module(obj.ToString(), type.Emitter);
                 }
                 else if (obj is int)
                 {
-                    module = new Module("", (ModuleType) (int) obj);
+                    module = new Module("", (ModuleType) (int) obj, type.Emitter);
                 }
                 else
                 {
-                    module = new Module();
+                    module = new Module(type.Emitter);
                 }
             }
             else if (attr.PositionalArguments.Count == 2)
@@ -675,21 +697,21 @@ namespace Bridge.Contract
                     var name = attr.PositionalArguments[0].ConstantValue;
                     var preventName = attr.PositionalArguments[1].ConstantValue;
 
-                    module = new Module(name != null ? name.ToString() : "", (bool)preventName);
+                    module = new Module(name != null ? name.ToString() : "", type.Emitter, (bool)preventName);
                 }
                 else if (attr.PositionalArguments[1].ConstantValue is bool)
                 {
                     var mtype = attr.PositionalArguments[0].ConstantValue;
                     var preventName = attr.PositionalArguments[1].ConstantValue;
 
-                    module = new Module("", (ModuleType)(int)mtype, (bool)preventName);
+                    module = new Module("", (ModuleType)(int)mtype, type.Emitter,(bool)preventName);
                 }
                 else
                 {
                     var mtype = attr.PositionalArguments[0].ConstantValue;
                     var name = attr.PositionalArguments[1].ConstantValue;
 
-                    module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype);
+                    module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype, type.Emitter);
                 }
             }
             else if (attr.PositionalArguments.Count == 3)
@@ -698,11 +720,11 @@ namespace Bridge.Contract
                 var name = attr.PositionalArguments[1].ConstantValue;
                 var preventName = attr.PositionalArguments[2].ConstantValue;
 
-                module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype, (bool)preventName);
+                module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype, type.Emitter, (bool)preventName);
             }
             else
             {
-                module = new Module();
+                module = new Module(type.Emitter);
             }
 
             if (attr.NamedArguments.Count > 0)
@@ -743,12 +765,15 @@ namespace Bridge.Contract
 
             if (currentTypeInfo != null && module != null)
             {
-                if (!module.PreventModuleName || type.TypeInfo != null)
+                if (emitter.Tag != "TS" || currentTypeInfo.Module == null || !currentTypeInfo.Module.Equals(module))
                 {
-                    moduleName = module.ExportAsNamespace;
-                }
+                    if (!module.PreventModuleName || (currentTypeInfo.Module != null && currentTypeInfo.Module.Equals(module)))
+                    {
+                        moduleName = module.ExportAsNamespace;
+                    }
 
-                EnsureDependencies(type, emitter, currentTypeInfo, module);
+                    EnsureDependencies(type, emitter, currentTypeInfo, module);
+                }
             }
 
             return GetCustomName(name, type, excludeNs, isNested, ref isCustomName, moduleName);
@@ -778,11 +803,11 @@ namespace Bridge.Contract
             if (!emitter.DisableDependencyTracking
                 && currentTypeInfo.Key != type.Key
                 && !Module.Equals(currentTypeInfo.Module, module)
-                && !emitter.CurrentDependencies.Any(d => d.DependencyName == module.Name))
+                && !emitter.CurrentDependencies.Any(d => d.DependencyName == module.OriginalName && d.VariableName == module.ExportAsNamespace))
             {
                 emitter.CurrentDependencies.Add(new ModuleDependency
                 {
-                    DependencyName = module.Name,
+                    DependencyName = module.OriginalName,
                     VariableName = module.ExportAsNamespace,
                     Type = module.Type,
                     PreventName = module.PreventModuleName
@@ -979,16 +1004,13 @@ namespace Bridge.Contract
 
             if (type.IsKnownType(KnownTypeCode.Byte) ||
                 type.IsKnownType(KnownTypeCode.Char) ||
-                type.IsKnownType(KnownTypeCode.Decimal) ||
                 type.IsKnownType(KnownTypeCode.Double) ||
                 type.IsKnownType(KnownTypeCode.Int16) ||
                 type.IsKnownType(KnownTypeCode.Int32) ||
-                type.IsKnownType(KnownTypeCode.Int64) ||
                 type.IsKnownType(KnownTypeCode.SByte) ||
                 type.IsKnownType(KnownTypeCode.Single) ||
                 type.IsKnownType(KnownTypeCode.UInt16) ||
-                type.IsKnownType(KnownTypeCode.UInt32) ||
-                type.IsKnownType(KnownTypeCode.UInt64))
+                type.IsKnownType(KnownTypeCode.UInt32))
             {
                 return "number";
             }
@@ -1078,6 +1100,16 @@ namespace Bridge.Contract
                 name += Helpers.PrefixDollar(type.TypeArguments.Count);
             }
 
+            if (isCustomName && excludens && name != null)
+            {
+                var idx = name.LastIndexOf('.');
+
+                if (idx > -1)
+                {
+                    name = name.Substring(idx + 1);
+                }
+            }
+
             if (!asDefinition && type.TypeArguments.Count > 0 && !Helpers.IsIgnoreGeneric(type, emitter, true))
             {
                 StringBuilder sb = new StringBuilder(name);
@@ -1115,18 +1147,15 @@ namespace Bridge.Contract
                     case KnownTypeCode.String:
                         return "string";
 
-                    case KnownTypeCode.Decimal:
                     case KnownTypeCode.Double:
                     case KnownTypeCode.Byte:
                     case KnownTypeCode.Char:
                     case KnownTypeCode.Int16:
                     case KnownTypeCode.Int32:
-                    case KnownTypeCode.Int64:
                     case KnownTypeCode.SByte:
                     case KnownTypeCode.Single:
                     case KnownTypeCode.UInt16:
                     case KnownTypeCode.UInt32:
-                    case KnownTypeCode.UInt64:
                         return "number";
                 }
             }
@@ -1134,14 +1163,14 @@ namespace Bridge.Contract
             return null;
         }
 
-        public static Tuple<string, string> GetNamespaceFilename(ITypeInfo typeInfo, IEmitter emitter)
+        public static Tuple<string, string, Module> GetNamespaceFilename(ITypeInfo typeInfo, IEmitter emitter)
         {
             var ns = typeInfo.GetNamespace(emitter, true);
             var fileName = ns ?? typeInfo.GetNamespace(emitter);
             var module = typeInfo.Module;
             string moduleName = null;
 
-            if (module != null)
+            if (module != null && module.Type == ModuleType.UMD)
             {
                 if (!module.PreventModuleName)
                 {
@@ -1151,6 +1180,10 @@ namespace Bridge.Contract
                 if (!String.IsNullOrEmpty(moduleName))
                 {
                     ns = string.IsNullOrWhiteSpace(ns) ? moduleName : (moduleName + "." + ns);
+                }
+                else
+                {
+                    module = null;
                 }
             }
 
@@ -1196,7 +1229,7 @@ namespace Bridge.Contract
                     break;
             }
 
-            return new Tuple<string, string>(ns, fileName);
+            return new Tuple<string, string, Module>(ns, fileName, module);
         }
     }
 }

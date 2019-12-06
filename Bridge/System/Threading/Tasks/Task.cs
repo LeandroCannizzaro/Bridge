@@ -3,37 +3,51 @@ using System.Collections.Generic;
 
 namespace System.Threading.Tasks
 {
-    [External]
-    [Reflectable]
-    public class Task : IDisposable, IBridgeClass
+    [Bridge.Convention(Member = Bridge.ConventionMember.Field | Bridge.ConventionMember.Method, Notation = Bridge.Notation.CamelCase)]
+    [Bridge.External]
+    [Bridge.Reflectable]
+    public class Task : IDisposable, Bridge.IBridgeClass, IAsyncResult
     {
         public extern Task(Action action);
 
         public extern Task(Action<object> action, object state);
 
-        [Convention(Notation.LowerCamelCase)] //[Field]
-        public extern AggregateException Exception { get; }
+        public extern AggregateException Exception
+        {
+            [Template("getException()")]
+            get;
+        }
 
         public extern bool IsCanceled
         {
-            [Template("isCanceled()")]
+            [Bridge.Template("isCanceled()")]
             get;
         }
 
         public extern bool IsCompleted
         {
-            [Template("isCompleted()")]
+            [Bridge.Template("isCompleted()")]
             get;
         }
 
         public extern bool IsFaulted
         {
-            [Template("isFaulted()")]
+            [Bridge.Template("isFaulted()")]
             get;
         }
 
-        [Convention(Notation.LowerCamelCase)] //[Field]
+        [Bridge.Convention(Bridge.Notation.CamelCase)]
         public extern TaskStatus Status
+        {
+            get;
+        }
+
+        public object AsyncState
+        {
+            get;
+        }
+
+        bool IAsyncResult.CompletedSynchronously
         {
             get;
         }
@@ -50,8 +64,45 @@ namespace System.Threading.Tasks
 
         public extern void Complete(object result = null);
 
+        [ToAwait]
+        public extern void Wait();
+
+        [Name("wait")]
+        public extern Task WaitTask();
+
+        [ToAwait]
+        public extern void Wait(CancellationToken cancellationToken);
+
+        [Name("wait")]
+        public extern Task WaitTask(CancellationToken cancellationToken);
+
+        [ToAwait]
+        public extern bool Wait(int millisecondsTimeout);
+
+        [Name("waitt")]
+        public extern Task<bool> WaitTask(int millisecondsTimeout);
+
+        [ToAwait]
+        public extern bool Wait(int millisecondsTimeout, CancellationToken cancellationToken);
+
+        [Name("waitt")]
+        public extern Task<bool> WaitTask(int millisecondsTimeout, CancellationToken cancellationToken);
+
+        [ToAwait]
+        public extern bool Wait(TimeSpan timeout);
+
+        [Name("waitt")]
+        public extern Task<bool> WaitTask(TimeSpan timeout);
+
         public static extern Task Delay(int millisecondDelay);
 
+        public static extern Task Delay(int millisecondsDelay, CancellationToken cancellationToken);
+
+        public static extern Task Delay(TimeSpan delay);
+
+        public static extern Task Delay(TimeSpan delay, CancellationToken cancellationToken);
+
+        [Bridge.Template("System.Threading.Tasks.Task.fromResult({result}, {TResult})")]
         public static extern Task<TResult> FromResult<TResult>(TResult result);
 
         public static extern Task Run(Action action);
@@ -91,8 +142,9 @@ namespace System.Threading.Tasks
         public static extern Task<TResult> FromPromise<TResult>(IPromise promise, Delegate resultHandler, Delegate errorHandler, Delegate progressHandler);
     }
 
-    [External]
-    [Reflectable]
+    [Bridge.Convention(Member = Bridge.ConventionMember.Field | Bridge.ConventionMember.Method, Notation = Bridge.Notation.CamelCase)]
+    [Bridge.External]
+    [Bridge.Reflectable]
     public class Task<TResult> : Task
     {
         public extern Task(Func<TResult> function);
@@ -101,13 +153,13 @@ namespace System.Threading.Tasks
 
         public extern TResult Result
         {
-            [Template("getResult()")]
+            [Bridge.Template("getResult()")]
             get;
         }
 
         public extern Task ContinueWith(Action<Task<TResult>> continuationAction);
 
-        [IgnoreGeneric]
+        [Bridge.IgnoreGeneric]
         public extern Task<TNewResult> ContinueWith<TNewResult>(Func<Task<TResult>, TNewResult> continuationFunction);
 
         public new extern TaskAwaiter<TResult> GetAwaiter();

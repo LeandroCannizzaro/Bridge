@@ -87,21 +87,21 @@ namespace Bridge.ClientTest.Batch1.Reflection
         private Assembly ImportedModuleTestCase
         {
             [Script(@"
-	var x = {
-		Foo: {
-			Bar: {
-				Inner: {
-					OtherFunction: function() { }
-				},
-				Something: function() { }
-			},
-			baz: function() {
-			},
-			Bar2: 0
-		}
-	};
-	x.Foo.baz.Test = function() {};
-	return x;")]
+    var x = {
+        Foo: {
+            Bar: {
+                Inner: {
+                    OtherFunction: function() { }
+                },
+                Something: function() { }
+            },
+            baz: function() {
+            },
+            Bar2: 0
+        }
+    };
+    x.Foo.baz.Test = function() {};
+    return x;")]
             get
             {
                 return null;
@@ -321,6 +321,12 @@ namespace Bridge.ClientTest.Batch1.Reflection
             Assert.AreEqual(new[] { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 }, Assembly.GetExecutingAssembly().GetManifestResourceData(typeof(AssemblyTests), "Resource1.bin"), "#1");
             Assert.AreEqual(new[] { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15 }, Assembly.GetExecutingAssembly().GetManifestResourceData(typeof(AssemblyTests), "Resource2.bin"), "#2");
             Assert.Null(Assembly.GetExecutingAssembly().GetManifestResourceData(typeof(AssemblyTests), "NonExistent"), "#3");
+        }
+
+        [Test]
+        public void UriBelongsSystem()
+        {
+            Assert.AreEqual(typeof(System.Uri).Assembly.FullName, "System");
         }
     }
 }

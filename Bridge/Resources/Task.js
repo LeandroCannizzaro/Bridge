@@ -1,16 +1,29 @@
     Bridge.define("System.Threading.Tasks.Task", {
-        inherits: [System.IDisposable],
+        inherits: [System.IDisposable, System.IAsyncResult],
 
         config: {
             alias: [
-                "dispose", "System$IDisposable$dispose"
-            ]
+                "dispose", "System$IDisposable$Dispose",
+                "AsyncState", "System$IAsyncResult$AsyncState",
+                "CompletedSynchronously", "System$IAsyncResult$CompletedSynchronously",
+                "IsCompleted", "System$IAsyncResult$IsCompleted"
+            ],
+
+            properties: {
+                IsCompleted: {
+                    get: function () {
+                        return this.isCompleted();
+                    }
+                }
+            }
         },
 
         ctor: function (action, state) {
             this.$initialize();
             this.action = action;
             this.state = state;
+            this.AsyncState = state;
+            this.CompletedSynchronously = false;
             this.exception = null;
             this.status = System.Threading.Tasks.TaskStatus.created;
             this.callbacks = [];
@@ -18,18 +31,64 @@
         },
 
         statics: {
-            delay: function (delay, state) {
-                var tcs = new System.Threading.Tasks.TaskCompletionSource();
+            queue: [],
 
-                setTimeout(function () {
-                    tcs.setResult(state);
-                }, delay);
+            runQueue: function () {
+                var queue = System.Threading.Tasks.Task.queue.slice(0);
+                System.Threading.Tasks.Task.queue = [];
+
+                for (var i = 0; i < queue.length; i++) {
+                    queue[i]();
+                }
+            },
+
+            schedule: function (fn) {
+                System.Threading.Tasks.Task.queue.push(fn);
+                Bridge.setImmediate(System.Threading.Tasks.Task.runQueue);
+            },
+
+            delay: function (delay, state) {
+                var tcs = new System.Threading.Tasks.TaskCompletionSource(),
+                    token,
+                    cancelCallback = false;
+
+                if (Bridge.is(state, System.Threading.CancellationToken)) {
+                    token = state;
+                    state = undefined;
+                }
+
+                if (token) {
+                    token.cancelWasRequested = function () {
+                        if (!cancelCallback) {
+                            cancelCallback = true;
+                            clearTimeout(clear);
+
+                            tcs.setCanceled();
+                        }
+                    };
+                }
+
+                var ms = delay;
+                if (Bridge.is(delay, System.TimeSpan)) {
+                    ms = delay.getTotalMilliseconds();
+                }
+
+                var clear = setTimeout(function () {
+                    if (!cancelCallback) {
+                        cancelCallback = true;
+                        tcs.setResult(state);
+                    }
+                }, ms);
+
+                if (token && token.getIsCancellationRequested()) {
+                    Bridge.setImmediate(token.cancelWasRequested);
+                }
 
                 return tcs.task;
             },
 
-            fromResult: function (result) {
-                var t = new System.Threading.Tasks.Task();
+            fromResult: function (result, T) {
+                var t = new (System.Threading.Tasks.Task$1(T || System.Object))();
 
                 t.status = System.Threading.Tasks.TaskStatus.ranToCompletion;
                 t.result = result;
@@ -40,13 +99,25 @@
             run: function (fn) {
                 var tcs = new System.Threading.Tasks.TaskCompletionSource();
 
-                setTimeout(function () {
+                System.Threading.Tasks.Task.schedule(function () {
                     try {
-                        tcs.setResult(fn());
+                        var result = fn();
+
+                        if (Bridge.is(result, System.Threading.Tasks.Task)) {
+                            result.continueWith(function () {
+                                if (result.isFaulted() || result.isCanceled()) {
+                                    tcs.setException(result.exception.innerExceptions.Count > 0 ? result.exception.innerExceptions.getItem(0) : result.exception);
+                                } else {
+                                    tcs.setResult(result.getAwaitedResult());
+                                }
+                            });
+                        } else {
+                            tcs.setResult(result);
+                        }
                     } catch (e) {
                         tcs.setException(System.Exception.create(e));
                     }
-                }, 0);
+                });
 
                 return tcs.task;
             },
@@ -88,7 +159,7 @@
                                     System.Array.addRange(exceptions, t.exception.innerExceptions);
                                     break;
                                 default:
-                                    throw new System.InvalidOperationException("Invalid task status: " + t.status);
+                                    throw new System.InvalidOperationException.$ctor1("Invalid task status: " + t.status);
                             }
 
                             if (--executing === 0) {
@@ -115,7 +186,7 @@
                 }
 
                 if (!tasks.length) {
-                    throw new System.ArgumentException("At least one task is required");
+                    throw new System.ArgumentException.$ctor1("At least one task is required");
                 }
 
                 var tcs = new System.Threading.Tasks.TaskCompletionSource(),
@@ -128,13 +199,11 @@
                                 tcs.trySetResult(t);
                                 break;
                             case System.Threading.Tasks.TaskStatus.canceled:
-                                tcs.trySetCanceled();
-                                break;
                             case System.Threading.Tasks.TaskStatus.faulted:
                                 tcs.trySetException(t.exception.innerExceptions);
                                 break;
                             default:
-                                throw new System.InvalidOperationException("Invalid task status: " + t.status);
+                                throw new System.InvalidOperationException.$ctor1("Invalid task status: " + t.status);
                         }
                     });
                 }
@@ -220,6 +289,82 @@
             }
         },
 
+        getException: function () {
+            return this.isCanceled() ? null : this.exception;
+        },
+
+        waitt: function (timeout, token) {
+            var ms = timeout,
+                tcs = new System.Threading.Tasks.TaskCompletionSource(),
+                cancelCallback = false;
+
+            if (token) {
+                token.cancelWasRequested = function () {
+                    if (!cancelCallback) {
+                        cancelCallback = true;
+                        clearTimeout(clear);
+                        tcs.setException(new System.OperationCanceledException.$ctor1(token));
+                    }
+                };
+            }
+
+            if (Bridge.is(timeout, System.TimeSpan)) {
+                ms = timeout.getTotalMilliseconds();
+            }
+
+            var clear = setTimeout(function () {
+                cancelCallback = true;
+                tcs.setResult(false);
+            }, ms);
+
+            this.continueWith(function () {
+                clearTimeout(clear);
+                if (!cancelCallback) {
+                    cancelCallback = true;
+                    tcs.setResult(true);
+                }
+            })
+
+            return tcs.task;
+        },
+
+        wait: function (token) {
+            var me = this,
+                tcs = new System.Threading.Tasks.TaskCompletionSource(),
+                complete = false;
+
+            if (token) {
+                token.cancelWasRequested = function () {
+                    if (!complete) {
+                        complete = true;
+                        tcs.setException(new System.OperationCanceledException.$ctor1(token));
+                    }
+                };
+            }
+
+            this.continueWith(function () {
+                if (!complete) {
+                    complete = true;
+                    if (me.isFaulted() || me.isCanceled()) {
+                        tcs.setException(me.exception);
+                    } else {
+                        tcs.setResult();
+                    }
+                }
+            })
+
+            return tcs.task;
+        },
+
+        continue: function (continuationAction) {
+            if (this.isCompleted()) {
+                System.Threading.Tasks.Task.queue.push(continuationAction);
+                System.Threading.Tasks.Task.runQueue();
+            } else {
+                this.callbacks.push(continuationAction);
+            }
+        },
+
         continueWith: function (continuationAction, raise) {
             var tcs = new System.Threading.Tasks.TaskCompletionSource(),
                 me = this,
@@ -234,7 +379,9 @@
                 };
 
             if (this.isCompleted()) {
-                setTimeout(fn, 0);
+                //System.Threading.Tasks.Task.schedule(fn);
+                System.Threading.Tasks.Task.queue.push(fn);
+                System.Threading.Tasks.Task.runQueue();
             } else {
                 this.callbacks.push(fn);
             }
@@ -244,14 +391,14 @@
 
         start: function () {
             if (this.status !== System.Threading.Tasks.TaskStatus.created) {
-                throw new System.InvalidOperationException("Task was already started.");
+                throw new System.InvalidOperationException.$ctor1("Task was already started.");
             }
 
             var me = this;
 
             this.status = System.Threading.Tasks.TaskStatus.running;
 
-            setTimeout(function () {
+            System.Threading.Tasks.Task.schedule(function () {
                 try {
                     var result = me.action(me.state);
 
@@ -262,19 +409,17 @@
                 } catch (e) {
                     me.fail(new System.AggregateException(null, [System.Exception.create(e)]));
                 }
-            }, 0);
+            });
         },
 
         runCallbacks: function () {
             var me = this;
 
-            setTimeout(function () {
-                for (var i = 0; i < me.callbacks.length; i++) {
-                    me.callbacks[i](me);
-                }
+            for (var i = 0; i < me.callbacks.length; i++) {
+                me.callbacks[i](me);
+            }
 
-                delete me.callbacks;
-            }, 0);
+            delete me.callbacks;
         },
 
         complete: function (result) {
@@ -295,17 +440,18 @@
             }
 
             this.exception = error;
-            this.status = System.Threading.Tasks.TaskStatus.faulted;
+            this.status = this.exception.hasTaskCanceledException && this.exception.hasTaskCanceledException() ? System.Threading.Tasks.TaskStatus.canceled : System.Threading.Tasks.TaskStatus.faulted;
             this.runCallbacks();
 
             return true;
         },
 
-        cancel: function () {
+        cancel: function (error) {
             if (this.isCompleted()) {
                 return false;
             }
 
+            this.exception = error || new System.AggregateException(null, [new System.Threading.Tasks.TaskCanceledException.$ctor3(this)]);
             this.status = System.Threading.Tasks.TaskStatus.canceled;
             this.runCallbacks();
 
@@ -329,13 +475,16 @@
                 case System.Threading.Tasks.TaskStatus.ranToCompletion:
                     return this.result;
                 case System.Threading.Tasks.TaskStatus.canceled:
-                    var ex = new System.Threading.Tasks.TaskCanceledException(null, this);
+                    if (this.exception && this.exception.innerExceptions) {
+                        throw awaiting ? (this.exception.innerExceptions.Count > 0 ? this.exception.innerExceptions.getItem(0) : null) : this.exception;
+                    }
 
+                    var ex = new System.Threading.Tasks.TaskCanceledException.$ctor3(this);
                     throw awaiting ? ex : new System.AggregateException(null, [ex]);
                 case System.Threading.Tasks.TaskStatus.faulted:
                     throw awaiting ? (this.exception.innerExceptions.Count > 0 ? this.exception.innerExceptions.getItem(0) : null) : this.exception;
                 default:
-                    throw new System.InvalidOperationException("Task is not yet completed.");
+                    throw new System.InvalidOperationException.$ctor1("Task is not yet completed.");
             }
         },
 
@@ -357,7 +506,7 @@
     Bridge.define("System.Threading.Tasks.Task$1", function (T) {
         return {
             inherits: [System.Threading.Tasks.Task],
-            ctor: function(action, state) {
+            ctor: function (action, state) {
                 this.$initialize();
                 System.Threading.Tasks.Task.ctor.call(this, action, state);
             }
@@ -379,27 +528,27 @@
     });
 
     Bridge.define("System.Threading.Tasks.TaskCompletionSource", {
-        ctor: function () {
+        ctor: function (state) {
             this.$initialize();
-            this.task = new System.Threading.Tasks.Task();
+            this.task = new System.Threading.Tasks.Task(null, state);
             this.task.status = System.Threading.Tasks.TaskStatus.running;
         },
 
         setCanceled: function () {
             if (!this.task.cancel()) {
-                throw new System.InvalidOperationException("Task was already completed.");
+                throw new System.InvalidOperationException.$ctor1("Task was already completed.");
             }
         },
 
         setResult: function (result) {
             if (!this.task.complete(result)) {
-                throw new System.InvalidOperationException("Task was already completed.");
+                throw new System.InvalidOperationException.$ctor1("Task was already completed.");
             }
         },
 
         setException: function (exception) {
             if (!this.trySetException(exception)) {
-                throw new System.InvalidOperationException("Task was already completed.");
+                throw new System.InvalidOperationException.$ctor1("Task was already completed.");
             }
         },
 
@@ -416,7 +565,13 @@
                 exception = [exception];
             }
 
-            return this.task.fail(new System.AggregateException(null, exception));
+            exception = new System.AggregateException(null, exception);
+
+            if (exception.hasTaskCanceledException()) {
+                return this.task.cancel(exception);
+            }
+
+            return this.task.fail(exception);
         }
     });
 
@@ -425,7 +580,7 @@
 
         config: {
             alias: [
-                "dispose", "System$IDisposable$dispose"
+                "dispose", "System$IDisposable$Dispose"
             ]
         },
 
@@ -448,6 +603,7 @@
                 h = this.handlers;
 
             this.clean();
+            this.token.cancelWasRequested();
 
             for (var i = 0; i < h.length; i++) {
                 try {
@@ -488,6 +644,7 @@
                     f: f,
                     s: s
                 };
+
                 this.handlers.push(o);
 
                 return new System.Threading.CancellationTokenRegistration(this, o);
@@ -553,6 +710,10 @@
             this.source = source;
         },
 
+        cancelWasRequested: function () {
+
+        },
+
         getCanBeCanceled: function () {
             return !this.source.uncancellable;
         },
@@ -563,7 +724,7 @@
 
         throwIfCancellationRequested: function () {
             if (this.source.isCancellationRequested) {
-                throw new System.OperationCanceledException(this);
+                throw new System.OperationCanceledException.$ctor1(this);
             }
         },
 
@@ -616,7 +777,7 @@
 
         config: {
             alias: [
-                "dispose", "System$IDisposable$dispose"
+                "dispose", "System$IDisposable$Dispose"
             ]
         },
 

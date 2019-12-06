@@ -237,10 +237,15 @@ namespace Bridge.Translator
             this.Write(name);
         }
 
-        private string[] allowedModifiers = new[] {"default", "defaultFn", "raw", "plain", "body", "gettmp", "version", "tmp", "type", "array", "module", CS.Methods.GETHASHCODE, CS.Methods.TOSTRING };
+        private string[] allowedModifiers = new[] {"default", "defaultFn", "raw", "plain", "body", "gettmp", "version", "tmp", "type", "array", "module", "nobox", CS.Methods.GETHASHCODE, CS.Methods.TOSTRING };
 
         protected virtual void EmitInlineExpressionList(ArgumentsInfo argsInfo, string inline, bool asRef = false, bool isNull = false, bool? definition = null)
         {
+            if (inline != null && inline.Trim().EndsWith(";"))
+            {
+                inline = inline.Trim().TrimEnd(';');
+            }
+
             IMember member = this.Method ?? argsInfo.Method ?? argsInfo.ResolveResult?.Member;
             if (member == null && argsInfo.Expression != null && argsInfo.Expression.Parent != null)
             {
@@ -419,6 +424,7 @@ namespace Bridge.Translator
                 bool isRaw = m.Groups[1].Success && m.Groups[1].Value == "*";
                 bool ignoreArray = isRaw || argsInfo.ParamsExpression == null;
                 string modifier = m.Groups[1].Success ? m.Groups[4].Value : null;
+                this.Emitter.TemplateModifier = modifier;
 
                 bool isSimple = false;
 
@@ -606,7 +612,7 @@ namespace Bridge.Translator
                 }
                 else if (key == "this" || key == argsInfo.ThisName || (key == "0" && argsInfo.IsExtensionMethod))
                 {
-                    if(modifier == CS.Methods.GETHASHCODE || modifier == CS.Methods.TOSTRING)
+                    if (modifier == CS.Methods.GETHASHCODE || modifier == CS.Methods.TOSTRING)
                     {
                         AstNode node = null;
                         if (argsInfo.ThisArgument is AstNode)
@@ -665,37 +671,57 @@ namespace Bridge.Translator
                         if (type != null)
                         {
                             bool needName = this.NeedName(type);
-
-                            if (needName)
+                            var argExpr = argsInfo.ArgumentsExpressions != null && argsInfo.ArgumentsExpressions.Length > 0 ? argsInfo.ArgumentsExpressions[0] : null;
+                            if (argExpr == null)
                             {
-                                isSimple = true;
-                                var enumType = NullableType.GetUnderlyingType(type);
-                                if (type.Kind == TypeKind.Enum && this.Emitter.Validator.IsExternalType(type.GetDefinition()))
+                                var expr = argsInfo.Expression as InvocationExpression;
+                                if (expr != null && expr.Target is MemberReferenceExpression)
                                 {
-                                    var enumMode = Helpers.EnumEmitMode(type);
-                                    if (enumMode >= 3 && enumMode < 7)
-                                    {
-                                        enumType = this.Emitter.Resolver.Compilation.FindType(KnownTypeCode.String);
-                                    }
-                                    else if (enumMode == 2)
-                                    {
-                                        enumType = type.GetDefinition().EnumUnderlyingType;
-                                    }
+                                    argExpr = ((MemberReferenceExpression)expr.Target).Target;
                                 }
-                                this.Write(BridgeTypes.ToJsName(enumType, this.Emitter));
                             }
-                            else
+
+                            string thisValue = argsInfo.GetThisValue();
+                            bool skipType = false;
+
+                            var typeDef = this.Emitter.BridgeTypes.Get(type, true)?.TypeDefinition;
+                            if (typeDef == null || !typeDef.IsValueType || NullableType.IsNullable(type) && NullableType.GetUnderlyingType(type).Kind == TypeKind.Struct)
                             {
-                                string thisValue = argsInfo.GetThisValue();
+                                if (argExpr != null)
+                                {
+                                    var writer = this.SaveWriter();
+                                    this.NewWriter();
+                                    argExpr.AcceptVisitor(this.Emitter);
+                                    thisValue = this.Emitter.Output.ToString();
+                                    this.RestoreWriter(writer);
+                                }
 
                                 if (thisValue != null)
                                 {
                                     if (type.Kind == TypeKind.TypeParameter && !Helpers.IsIgnoreGeneric(((ITypeParameter)type).Owner, this.Emitter))
                                     {
                                         thisValue = thisValue + ", " + type.Name;
+                                        skipType = true;
                                     }
-                                    this.Write(JS.Funcs.BRIDGE_GET_TYPE + "(" + thisValue + ")");
+
                                 }
+
+                                var s = JS.Funcs.BRIDGE_GET_TYPE + "(" + thisValue;
+
+                                if (needName && !skipType)
+                                {
+                                    s += ", ";
+                                    isSimple = true;
+                                    s += GetTypeName(type);
+                                }
+
+                                s += ")";
+                                this.Write(s);
+                            }
+                            else
+                            {
+                                isSimple = true;
+                                this.Write(GetTypeName(type));
                             }
                         }
                     }
@@ -753,7 +779,7 @@ namespace Bridge.Translator
                         }
                         else if (modifier == "tmp")
                         {
-                            var tmpVarName = this.GetTempVarName();
+                            string tmpVarName = null;
                             var nameExpr = exprs[0] as PrimitiveExpression;
 
                             if (nameExpr == null)
@@ -763,7 +789,15 @@ namespace Bridge.Translator
 
                             var keyExpr = string.IsNullOrWhiteSpace(nameExpr.LiteralValue) ? nameExpr.Value.ToString() : nameExpr.LiteralValue;
 
-                            Emitter.NamedTempVariables[keyExpr] = tmpVarName;
+                            if (!Emitter.NamedTempVariables.ContainsKey(keyExpr))
+                            {
+                                tmpVarName = this.GetTempVarName();
+                                Emitter.NamedTempVariables[keyExpr] = tmpVarName;
+                            } else
+                            {
+                                tmpVarName = Emitter.NamedTempVariables[keyExpr];
+                            }
+
                             Write(tmpVarName);
                             isSimple = true;
                         }
@@ -818,7 +852,7 @@ namespace Bridge.Translator
 
                             if (!Emitter.NamedTempVariables.ContainsKey(keyExpr))
                             {
-                                throw new EmitterException(exprs[0], "Primitive expression is required");
+                                Emitter.NamedTempVariables[keyExpr] = this.GetTempVarName();
                             }
 
                             var tmpVarName = Emitter.NamedTempVariables[keyExpr];
@@ -1126,6 +1160,7 @@ namespace Bridge.Translator
 
                 string replacement = this.Emitter.Output.ToString();
                 this.Emitter.Output = oldSb;
+                this.Emitter.TemplateModifier = null;
 
                 if (!isSimple && keyMatches.Count(keyMatch =>
                 {
@@ -1174,6 +1209,25 @@ namespace Bridge.Translator
             }
         }
 
+        private string GetTypeName(IType type)
+        {
+            var enumType = NullableType.GetUnderlyingType(type);
+            if (type.Kind == TypeKind.Enum && this.Emitter.Validator.IsExternalType(type.GetDefinition()))
+            {
+                var enumMode = Helpers.EnumEmitMode(type);
+                if (enumMode >= 3 && enumMode < 7)
+                {
+                    enumType = this.Emitter.Resolver.Compilation.FindType(KnownTypeCode.String);
+                }
+                else if (enumMode == 2)
+                {
+                    enumType = type.GetDefinition().EnumUnderlyingType;
+                }
+            }
+
+            return BridgeTypes.ToJsName(enumType, this.Emitter);
+        }
+
         public void AddModuleByType(List<string> amd, List<string> cjs, Module module)
         {
             if (module != null)
@@ -1196,51 +1250,45 @@ namespace Bridge.Translator
 
         private void WriteGetType(bool needName, IType type, AstNode node, string modifier)
         {
-            if (needName)
+            string s;
+            var typeDef = this.Emitter.BridgeTypes.Get(type, true)?.TypeDefinition;
+            if (node != null && (typeDef == null || !typeDef.IsValueType || NullableType.IsNullable(type) && NullableType.GetUnderlyingType(type).Kind == TypeKind.Struct))
             {
-                var enumType = type;
-                if (type.Kind == TypeKind.Enum && this.Emitter.Validator.IsExternalType(type.GetDefinition()))
+                var writer = this.SaveWriter();
+                this.NewWriter();
+                node.AcceptVisitor(this.Emitter);
+                s = this.Emitter.Output.ToString();
+                this.RestoreWriter(writer);
+
+                if (modifier == "raw")
                 {
-                    var enumMode = Helpers.EnumEmitMode(type);
-                    if (enumMode >= 3 && enumMode < 7)
-                    {
-                        enumType = this.Emitter.Resolver.Compilation.FindType(KnownTypeCode.String);
-                    }
-                    else if (enumMode == 2)
-                    {
-                        enumType = type.GetDefinition().EnumUnderlyingType;
-                    }
+                    s = this.RemoveTokens(s).Trim('"');
                 }
-                this.Write(BridgeTypes.ToJsName(enumType, this.Emitter));
             }
             else
             {
-                string s;
-                if (node != null)
-                {
-                    var writer = this.SaveWriter();
-                    this.NewWriter();
-                    node.AcceptVisitor(this.Emitter);
-                    s = this.Emitter.Output.ToString();
-                    this.RestoreWriter(writer);
-
-                    if (modifier == "raw")
-                    {
-                        s = this.RemoveTokens(s).Trim('"');
-                    }
-                }
-                else
-                {
-                    s = "null";
-                }
-
-                if (type.Kind == TypeKind.TypeParameter && !Helpers.IsIgnoreGeneric(((ITypeParameter)type).Owner, this.Emitter))
-                {
-                    s = s + ", " + type.Name;
-                }
-
-                this.Write(this.WriteIndentToString(JS.Funcs.BRIDGE_GET_TYPE + "(" + s + ")"));
+                this.Write(GetTypeName(type));
+                return;
             }
+
+            bool skipType = false;
+            if (type.Kind == TypeKind.TypeParameter && !Helpers.IsIgnoreGeneric(((ITypeParameter)type).Owner, this.Emitter))
+            {
+                s = s + ", " + type.Name;
+                skipType = true;
+            }
+
+            s = JS.Funcs.BRIDGE_GET_TYPE + "(" + s;
+
+            if (needName && !skipType)
+            {
+                s += ", ";
+                s += GetTypeName(type);
+            }
+
+            s = s + ")";
+
+            this.Write(this.WriteIndentToString(s));
         }
 
         private bool NeedName(IType type)
@@ -1264,7 +1312,18 @@ namespace Bridge.Translator
             {
                 if (modifier == "defaultFn")
                 {
-                    this.Write(BridgeTypes.ToJsName((AstType)def, this.Emitter) + "." + JS.Funcs.GETDEFAULTVALUE);
+                    this.WriteFunction();
+                    this.WriteOpenCloseParentheses(true);
+                    this.BeginBlock();
+                    this.WriteReturn(true);
+
+                    this.Write(JS.Funcs.BRIDGE_GETDEFAULTVALUE + "(");
+                    this.Write(BridgeTypes.ToJsName((AstType)def, this.Emitter));
+                    this.Write(")");
+
+                    this.WriteSemiColon();
+                    this.WriteNewLine();
+                    this.EndBlock();
                 }
                 else
                 {
@@ -1275,7 +1334,20 @@ namespace Bridge.Translator
             {
                 if (modifier == "defaultFn")
                 {
-                    this.Write(BridgeTypes.ToJsName((IType)def, this.Emitter) + "." + JS.Funcs.GETDEFAULTVALUE);
+                    this.WriteFunction();
+                    this.WriteOpenCloseParentheses(true);
+                    this.BeginBlock();
+                    this.WriteReturn(true);
+
+                    this.Write(JS.Funcs.BRIDGE_GETDEFAULTVALUE + "(");
+
+                    this.Write(BridgeTypes.ToJsName((IType)def, this.Emitter));
+
+                    this.Write(")");
+
+                    this.WriteSemiColon();
+                    this.WriteNewLine();
+                    this.EndBlock();
                 }
                 else
                 {
@@ -1284,7 +1356,15 @@ namespace Bridge.Translator
             }
             else if (def is RawValue)
             {
+                this.WriteFunction();
+                this.WriteOpenCloseParentheses(true);
+                this.BeginBlock();
+                this.WriteReturn(true);
                 this.Write(def.ToString());
+
+                this.WriteSemiColon();
+                this.WriteNewLine();
+                this.EndBlock();
             }
             else
             {

@@ -1,52 +1,49 @@
-using Bridge;
 using System.ComponentModel;
 
 namespace System
 {
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    [External]
-    [NonScriptable]
-    public class ValueType
+    [Bridge.External]
+    public abstract class ValueType
     {
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [External]
-    [NonScriptable]
+    [Bridge.External]
+    [Bridge.NonScriptable]
     public struct IntPtr
     {
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [External]
-    [NonScriptable]
+    [Bridge.External]
+    [Bridge.NonScriptable]
     public struct UIntPtr
     {
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [External]
-    [NonScriptable]
+    [Bridge.External]
+    [Bridge.NonScriptable]
     public class ParamArrayAttribute
     {
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [External]
-    [NonScriptable]
+    [Bridge.External]
+    [Bridge.NonScriptable]
     public struct RuntimeTypeHandle
     {
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [External]
-    [NonScriptable]
+    [Bridge.External]
+    [Bridge.NonScriptable]
     public struct RuntimeFieldHandle
     {
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [NonScriptable]
+    [Bridge.NonScriptable]
     public struct RuntimeMethodHandle
     {
     }

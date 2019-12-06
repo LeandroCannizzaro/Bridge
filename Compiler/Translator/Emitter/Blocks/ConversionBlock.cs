@@ -156,7 +156,30 @@ namespace Bridge.Translator
                 var expectedType = block.Emitter.Resolver.Resolver.GetExpectedType(expression);
                 int level = 0;
 
-                if (expression.Parent is ParenthesizedExpression && expression.Parent.Parent is CastExpression)
+                if (expression.Parent is ConstructorInitializer ci && expectedType.Equals(rr.Type))
+                {
+                    var prr = block.Emitter.Resolver.ResolveNode(expression.Parent, block.Emitter);
+
+                    if (prr is InvocationResolveResult irr)
+                    {
+                        var args = irr.GetArgumentsForCall();
+
+                        for (int i = 0; i < ci.Arguments.Count; i++)
+                        {
+                            var item = ci.Arguments.ElementAt(i);
+                            if (item.Equals(expression))
+                            {
+                                if(args.Count > i)
+                                {
+                                    expectedType = args[i].Type;
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+                }
+                else if (expression.Parent is ParenthesizedExpression && expression.Parent.Parent is CastExpression)
                 {
                     var prr = block.Emitter.Resolver.ResolveNode(expression.Parent, block.Emitter);
                     var pconversion = block.Emitter.Resolver.Resolver.GetConversion((Expression)expression.Parent);
@@ -313,6 +336,7 @@ namespace Bridge.Translator
             int level, ResolveResult rr, bool ignoreConversionResolveResult = false, bool ignoreBoxing = false)
         {
             bool isExtensionMethodArgument = false;
+            bool isBoxing = conversion.IsBoxingConversion;
             if (expression.Parent is MemberReferenceExpression && expression.Parent.Parent is InvocationExpression)
             {
                 var inv_rr = block.Emitter.Resolver.ResolveNode(expression.Parent.Parent, block.Emitter) as CSharpInvocationResolveResult;
@@ -321,6 +345,11 @@ namespace Bridge.Translator
                 {
                     conversion = block.Emitter.Resolver.Resolver.GetConversion((Expression)expression.Parent);
                     isExtensionMethodArgument = true;
+
+                    if (expression.Parent.Parent is InvocationExpression ie && ie.Target is MemberReferenceExpression mre && expression.Equals(mre.Target))
+                    {
+                        isBoxing = conversion.IsBoxingConversion;
+                    }
                 }
             }
 
@@ -385,7 +414,7 @@ namespace Bridge.Translator
                                      && !(memberDeclaringTypeDefinition.Namespace == CS.NS.SYSTEM || memberDeclaringTypeDefinition.Namespace.StartsWith(CS.NS.SYSTEM + "."));
 
                         var attr = parent_rr.Member.Attributes.FirstOrDefault(a => a.AttributeType.FullName == "Bridge.UnboxAttribute");
-                         
+
                         if (attr != null)
                         {
                             isArgument = (bool)attr.PositionalArguments.First().ConstantValue;
@@ -402,6 +431,7 @@ namespace Bridge.Translator
                     }
                 }
 
+                var nobox = block.Emitter.TemplateModifier == "nobox";
                 var isStringConcat = false;
                 var binaryOperatorExpression = expression.Parent as BinaryOperatorExpression;
                 if (binaryOperatorExpression != null)
@@ -416,9 +446,9 @@ namespace Bridge.Translator
                     || rr.Type.IsKnownType(KnownTypeCode.NullableOfT) && ConversionBlock.IsBoxable(NullableType.GetUnderlyingType(rr.Type), block.Emitter);
                 var nullable = rr.Type.IsKnownType(KnownTypeCode.NullableOfT);
 
-                if (conversion.IsBoxingConversion && !isStringConcat && block.Emitter.Rules.Boxing == BoxingRule.Managed)
+                if (isBoxing && !isStringConcat && block.Emitter.Rules.Boxing == BoxingRule.Managed)
                 {
-                    if (needBox && !isArgument)
+                    if (!nobox && needBox && !isArgument)
                     {
                         block.Write(JS.Types.Bridge.BOX);
                         block.WriteOpenParentheses();
@@ -447,7 +477,7 @@ namespace Bridge.Translator
                             block.Emitter.ForbidLifting = true;
                         }
                     }
-                    else  if(!Helpers.IsImmutableStruct(block.Emitter, NullableType.GetUnderlyingType(rr.Type)))
+                    else  if (!Helpers.IsImmutableStruct(block.Emitter, NullableType.GetUnderlyingType(rr.Type)))
                     {
                         if (nullable)
                         {
@@ -463,12 +493,20 @@ namespace Bridge.Translator
 
                 if (conversion.IsUnboxingConversion || isArgument && (expectedType.IsKnownType(KnownTypeCode.Object) || ConversionBlock.IsUnpackArrayObject(expectedType)) && (rr.Type.IsKnownType(KnownTypeCode.Object) || ConversionBlock.IsUnpackGenericInterfaceObject(rr.Type) || ConversionBlock.IsUnpackGenericArrayInterfaceObject(rr.Type)))
                 {
-                    if (block.Emitter.Rules.Boxing == BoxingRule.Managed)
+                    if (!nobox && block.Emitter.Rules.Boxing == BoxingRule.Managed)
                     {
                         block.Write(JS.Types.Bridge.UNBOX);
                         block.WriteOpenParentheses();
-                        block.AfterOutput2 += ")";
-                    }                    
+                        if (conversion.IsUnboxingConversion)
+                        {
+                            block.AfterOutput2 += string.Format(", {0})", ConversionBlock.GetBoxedType(expectedType, block.Emitter));
+                        }
+                        else
+                        {
+                            block.AfterOutput2 += ")";
+                        }
+
+                    }
                 }
                 else if (conversion.IsUnboxingConversion && !Helpers.IsImmutableStruct(block.Emitter, NullableType.GetUnderlyingType(rr.Type)))
                 {
@@ -696,7 +734,7 @@ namespace Bridge.Translator
                     {
                         new InlineArgumentsBlock(block.Emitter, new ArgumentsInfo(block.Emitter, (ObjectCreateExpression)expression, method), inline).Emit();
                     }
-                    else if (expression is UnaryOperatorExpression)
+                    /*else if (expression is UnaryOperatorExpression)
                     {
                         var unaryExpression = (UnaryOperatorExpression)expression;
                         var resolveOperator = block.Emitter.Resolver.ResolveNode(unaryExpression, block.Emitter);
@@ -710,7 +748,7 @@ namespace Bridge.Translator
                         {
                             new InlineArgumentsBlock(block.Emitter, new ArgumentsInfo(block.Emitter, expression, method), inline, method).Emit();
                         }
-                    }
+                    }*/
                     else
                     {
                         new InlineArgumentsBlock(block.Emitter, new ArgumentsInfo(block.Emitter, expression, method), inline, method).Emit();
@@ -807,6 +845,12 @@ namespace Bridge.Translator
             {
                 var index = invocationExpression.Arguments.ToList().IndexOf(expression);
                 var methodResolveResult = block.Emitter.Resolver.ResolveNode(invocationExpression, block.Emitter) as MemberResolveResult;
+                var invocationResolveResult = methodResolveResult as CSharpInvocationResolveResult;
+
+                if (invocationResolveResult != null && invocationResolveResult.IsExtensionMethodInvocation)
+                {
+                    index++;
+                }
 
                 if (methodResolveResult != null)
                 {

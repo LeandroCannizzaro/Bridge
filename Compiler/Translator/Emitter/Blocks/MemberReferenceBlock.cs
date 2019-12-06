@@ -46,9 +46,18 @@ namespace Bridge.Translator
                 MemberResolveResult member = resolveResult as MemberResolveResult;
                 bool nativeImplementation = true;
                 var externalInterface = member != null && this.Emitter.Validator.IsExternalInterface(member.Member.DeclaringTypeDefinition, out nativeImplementation);
-                bool isField = externalInterface && memberTargetrr != null && memberTargetrr.Member is IField && (memberTargetrr.TargetResult is ThisResolveResult || memberTargetrr.TargetResult is LocalResolveResult);
+                bool isField = memberTargetrr != null && memberTargetrr.Member is IField && (memberTargetrr.TargetResult is ThisResolveResult || memberTargetrr.TargetResult is LocalResolveResult);
+                bool variance = false;
 
-                if (externalInterface && !nativeImplementation && !(targetrr is ThisResolveResult || targetrr is TypeResolveResult || targetrr is LocalResolveResult || isField))
+                if (member != null)
+                {
+                    var itypeDef = member.Member.DeclaringTypeDefinition;
+                    variance = MetadataUtils.IsJsGeneric(itypeDef, this.Emitter) &&
+                        itypeDef.TypeParameters != null &&
+                        itypeDef.TypeParameters.Any(typeParameter => typeParameter.Variance != VarianceModifier.Invariant);
+                }
+
+                if ((externalInterface && !nativeImplementation || variance) && !(targetrr is ThisResolveResult || targetrr is TypeResolveResult || targetrr is LocalResolveResult || isField))
                 {
                     if (openParentheses)
                     {
@@ -404,7 +413,7 @@ namespace Bridge.Translator
                 if (parentInvocation == null || parentInvocation.Target != memberReferenceExpression)
                 {
                     var method = (IMethod)member.Member;
-                    if (method.TypeArguments.Count > 0)
+                    if (method.TypeArguments.Count > 0 || method.IsExtensionMethod)
                     {
                         inline = MemberReferenceBlock.GenerateInlineForMethodReference(method, this.Emitter);
                     }
@@ -565,6 +574,10 @@ namespace Bridge.Translator
                     inline = this.Emitter.Output.ToString();
                     inline = inline.Replace("[[0]]", "{0}");
                 }
+
+                this.Emitter.Output = new StringBuilder(inline);
+                Helpers.CheckValueTypeClone(resolveResult, this.MemberReferenceExpression, this, pos);
+                inline = this.Emitter.Output.ToString();
 
                 this.Emitter.IsAssignment = oldIsAssignment;
                 this.Emitter.IsUnaryAccessor = oldUnary;
@@ -926,7 +939,9 @@ namespace Bridge.Translator
                     {
                         new InlineArgumentsBlock(this.Emitter, new ArgumentsInfo(this.Emitter, memberReferenceExpression, resolveResult), inline, (IMethod)member.Member, targetrr).EmitFunctionReference();
                     }
-                    else if (resolveResult is InvocationResolveResult || (member.Member.SymbolKind == SymbolKind.Property && this.Emitter.IsAssignment))
+                    else if (resolveResult is InvocationResolveResult ||
+                        (member.Member.SymbolKind == SymbolKind.Property && this.Emitter.IsAssignment) ||
+                        (member.Member != null && member.Member is IEvent))
                     {
                         this.PushWriter(inline);
                     }

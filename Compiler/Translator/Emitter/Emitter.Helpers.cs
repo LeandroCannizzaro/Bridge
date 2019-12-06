@@ -84,7 +84,7 @@ namespace Bridge.Translator
 
         public virtual string ToJavaScript(object value)
         {
-            return JsonConvert.SerializeObject(value);
+            return JsonConvert.SerializeObject(value, new JsonSerializerSettings { StringEscapeHandling = StringEscapeHandling.EscapeNonAscii });
         }
 
         protected virtual ICSharpCode.NRefactory.CSharp.Attribute GetAttribute(AstNodeCollection<AttributeSection> attributes, string name)
@@ -368,7 +368,7 @@ namespace Bridge.Translator
         public virtual NameSemantic GetNameSemantic(IEntity member)
         {
             NameSemantic result;
-            if(this.entityNameCache.TryGetValue(member, out result))
+            if (this.entityNameCache.TryGetValue(member, out result))
             {
                 return result;
             }
@@ -493,7 +493,7 @@ namespace Bridge.Translator
                 return this.GetInline(mrr.Member);
             }
 
-            var attr = this.GetAttribute(method.Attributes, Bridge.Translator.Translator.Bridge_ASSEMBLY + ".TemplateAttribute");
+            var attr = this.GetAttribute(method.Attributes, Bridge.Translator.Translator.Bridge_ASSEMBLY + ".Template");
 
             return attr != null && attr.Arguments.Count > 0 ? ((string)((PrimitiveExpression)attr.Arguments.First()).Value) : null;
         }
@@ -540,7 +540,7 @@ namespace Bridge.Translator
                     }
                 }
 
-                if(inlineCode == null)
+                if (inlineCode == null)
                 {
                     inlineCode = attr != null && attr.PositionalArguments.Count > 0 ? attr.PositionalArguments[0].ConstantValue.ToString() : null;
                 }

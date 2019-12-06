@@ -14,6 +14,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Mono.Cecil.Rocks;
 using ICustomAttributeProvider = Mono.Cecil.ICustomAttributeProvider;
+using System.Text;
 
 namespace Bridge.Translator
 {
@@ -209,6 +210,19 @@ namespace Bridge.Translator
             return
                 this.HasAttribute(entity.Attributes, externalAttr)
                 || this.HasAttribute(entity.Attributes, nonScriptableAttr);
+        }
+
+        public virtual bool IsBridgeClass(IType type)
+        {
+            foreach (var i in type.GetAllBaseTypes().Where(t => t.Kind == TypeKind.Interface))
+            {
+                if (i.FullName == JS.Types.BRIDGE_IBridgeClass)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public virtual bool IsBridgeClass(TypeDefinition type)
@@ -510,7 +524,7 @@ namespace Bridge.Translator
 
         private Stack<TypeDefinition> _stack = new Stack<TypeDefinition>();
 
-        public virtual string GetCustomTypeName(TypeDefinition type, IEmitter emitter, bool excludeNs)
+        public virtual string GetCustomTypeName(TypeDefinition type, IEmitter emitter, bool excludeNs, bool asDefinition = true)
         {
             if (this._stack.Contains(type))
             {
@@ -565,6 +579,37 @@ namespace Bridge.Translator
 
             if (!string.IsNullOrEmpty(name))
             {
+                if (excludeNs)
+                {
+                    var idx = name.LastIndexOf('.');
+
+                    if (idx > -1)
+                    {
+                        name = name.Substring(idx + 1);
+                    }
+                }
+
+                var typeDef = emitter.BridgeTypes.Get(type).Type;
+
+                if (typeDef != null && !asDefinition && typeDef.TypeArguments.Count > 0 && !Helpers.IsIgnoreGeneric(typeDef, emitter, true))
+                {
+                    StringBuilder sb = new StringBuilder(name);
+                    bool needComma = false;
+                    sb.Append("<");
+                    foreach (var typeArg in typeDef.TypeArguments)
+                    {
+                        if (needComma)
+                        {
+                            sb.Append(",");
+                        }
+
+                        needComma = true;
+                        sb.Append(BridgeTypes.ToTypeScriptName(typeArg, emitter));
+                    }
+                    sb.Append(">");
+                    name = sb.ToString();
+                }
+
                 return name;
             }
 
@@ -745,6 +790,15 @@ namespace Bridge.Translator
                     this.ReadModuleFromAttribute(type, translator, attr);
                 }
             }
+
+            if (translator.AssemblyInfo.Module != null && type.Module.Assembly.Equals(translator.AssemblyDefinition))
+            {
+                var typeInfo = this.EnsureTypeInfo(type, translator);
+                if (typeInfo.Module == null)
+                {
+                    typeInfo.Module = translator.AssemblyInfo.Module;
+                }
+            }
         }
 
         private void ReadModuleFromAttribute(TypeDefinition type, ITranslator translator, CustomAttribute attr)
@@ -758,19 +812,19 @@ namespace Bridge.Translator
 
                 if (obj is bool)
                 {
-                    module = new Module((bool)obj);
+                    module = new Module((bool)obj, null);
                 }
                 else if (obj is string)
                 {
-                    module = new Module(obj.ToString());
+                    module = new Module(obj.ToString(), null);
                 }
                 else if (obj is int)
                 {
-                    module = new Module("", (ModuleType)(int)obj);
+                    module = new Module("", (ModuleType)(int)obj, null);
                 }
                 else
                 {
-                    module = new Module();
+                    module = new Module(null);
                 }
             }
             else if (attr.ConstructorArguments.Count == 2)
@@ -780,21 +834,21 @@ namespace Bridge.Translator
                     var name = attr.ConstructorArguments[0].Value;
                     var preventName = attr.ConstructorArguments[1].Value;
 
-                    module = new Module(name != null ? name.ToString() : "", (bool)preventName);
+                    module = new Module(name != null ? name.ToString() : "", null, (bool)preventName);
                 }
                 else if (attr.ConstructorArguments[1].Value is bool)
                 {
                     var mtype = attr.ConstructorArguments[0].Value;
                     var preventName = attr.ConstructorArguments[1].Value;
 
-                    module = new Module("", (ModuleType)(int)mtype, (bool)preventName);
+                    module = new Module("", (ModuleType)(int)mtype, null, (bool)preventName);
                 }
                 else
                 {
                     var mtype = attr.ConstructorArguments[0].Value;
                     var name = attr.ConstructorArguments[1].Value;
 
-                    module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype);
+                    module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype, null);
                 }
             }
             else if (attr.ConstructorArguments.Count == 3)
@@ -803,11 +857,11 @@ namespace Bridge.Translator
                 var name = attr.ConstructorArguments[1].Value;
                 var preventName = attr.ConstructorArguments[2].Value;
 
-                module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype, (bool)preventName);
+                module = new Module(name != null ? name.ToString() : "", (ModuleType)(int)mtype, null, (bool)preventName);
             }
             else
             {
-                module = new Module();
+                module = new Module(null);
             }
 
             if (attr.Properties.Count > 0)
@@ -832,25 +886,33 @@ namespace Bridge.Translator
         {
             if (type.HasCustomAttributes)
             {
-                var attr = this.GetAttribute(type.CustomAttributes, Translator.Bridge_ASSEMBLY + ".ModuleDependencyAttribute");
+                var attrName = Translator.Bridge_ASSEMBLY + ".ModuleDependencyAttribute";
+                var attrs = type.CustomAttributes.Where(attr => attr.AttributeType.FullName == attrName).ToList();
 
-                if (attr != null)
+                if (attrs.Count > 0)
                 {
-                    var typeInfo = this.EnsureTypeInfo(type, translator);
-
-                    if (attr.ConstructorArguments.Count > 0)
+                    foreach (var attr in attrs)
                     {
-                        ModuleDependency dependency = new ModuleDependency();
-                        var obj = this.GetAttributeArgumentValue(attr, 0);
-                        dependency.DependencyName = obj is string ? obj.ToString() : "";
+                        var typeInfo = this.EnsureTypeInfo(type, translator);
 
-                        if (attr.ConstructorArguments.Count > 1)
+                        if (attr.ConstructorArguments.Count > 0)
                         {
-                            obj = this.GetAttributeArgumentValue(attr, 1);
-                            dependency.VariableName = obj is string ? obj.ToString() : "";
-                        }
+                            ModuleDependency dependency = new ModuleDependency();
+                            var obj = this.GetAttributeArgumentValue(attr, 0);
+                            dependency.DependencyName = obj is string ? obj.ToString() : "";
 
-                        typeInfo.Dependencies.Add(dependency);
+                            if (attr.ConstructorArguments.Count > 1)
+                            {
+                                obj = this.GetAttributeArgumentValue(attr, 1);
+                                dependency.VariableName = obj is string ? obj.ToString() : "";
+                            }
+                            else
+                            {
+                                dependency.VariableName = Module.EscapeName(dependency.DependencyName);
+                            }
+
+                            typeInfo.Dependencies.Add(dependency);
+                        }
                     }
                 }
             }

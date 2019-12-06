@@ -52,11 +52,19 @@
             },
 
             eq: function (t1, t2) {
-                return Bridge.hasValue$1(t1, t2) ? (t1.ticks.eq(t2.ticks)) : null;
+                if (t1 === null && t2 === null) {
+                    return true;
+                }
+
+                return Bridge.hasValue$1(t1, t2) ? (t1.ticks.eq(t2.ticks)) : false;
             },
 
             neq: function (t1, t2) {
-                return Bridge.hasValue$1(t1, t2) ? (t1.ticks.ne(t2.ticks)) : null;
+                if (t1 === null && t2 === null) {
+                    return false;
+                }
+
+                return Bridge.hasValue$1(t1, t2) ? (t1.ticks.ne(t2.ticks)) : true;
             },
 
             plus: function (t) {
@@ -81,6 +89,44 @@
 
             lte: function (a, b) {
                 return Bridge.hasValue$1(a, b) ? (a.ticks.lte(b.ticks)) : false;
+            },
+
+            timeSpanWithDays: /^(\-)?(\d+)[\.|:](\d+):(\d+):(\d+)(\.\d+)?/,
+            timeSpanNoDays: /^(\-)?(\d+):(\d+):(\d+)(\.\d+)?/,
+
+            parse: function(value) {
+                var match,
+                    milliseconds;
+
+                function parseMilliseconds(value) {
+                    return value ? parseFloat('0' + value) * 1000 : 0;
+                }
+
+                if ((match = value.match(System.TimeSpan.timeSpanWithDays))) {
+                    var ts = new System.TimeSpan(match[2], match[3], match[4], match[5], parseMilliseconds(match[6]));
+
+                    return match[1] ? new System.TimeSpan(ts.ticks.neg()) : ts;
+                }
+
+                if ((match = value.match(System.TimeSpan.timeSpanNoDays))) {
+                    var ts = new System.TimeSpan(0, match[2], match[3], match[4], parseMilliseconds(match[5]));
+
+                    return match[1] ? new System.TimeSpan(ts.ticks.neg()) : ts;
+                }
+
+                return null;
+            },
+
+            tryParse: function (value, provider, result) {
+                result.v = this.parse(value);
+
+                if (result.v == null) {
+                    result.v = this.minValue;
+
+                    return false;
+                }
+
+                return true;
             }
         },
 
@@ -97,6 +143,11 @@
             } else if (arguments.length === 5) {
                 this.ticks = new System.Int64(arguments[0]).mul(24).add(arguments[1]).mul(60).add(arguments[2]).mul(60).add(arguments[3]).mul(1e3).add(arguments[4]).mul(1e4);
             }
+        },
+
+        TimeToTicks: function (hour, minute, second) {
+            var totalSeconds = System.Int64(hour).mul("3600").add(System.Int64(minute).mul("60")).add(System.Int64(second));
+            return totalSeconds.mul("10000000");
         },
 
         getTicks: function () {
@@ -189,8 +240,9 @@
                 me = this,
                 dtInfo = (provider || System.Globalization.CultureInfo.getCurrentCulture()).getFormat(System.Globalization.DateTimeFormatInfo),
                 format = function (t, n, dir, cut) {
-                    return System.String.alignString((t | 0).toString(), n || 2, "0", dir || 2, cut || false);
-                };
+                    return System.String.alignString(Math.abs(t | 0).toString(), n || 2, "0", dir || 2, cut || false);
+                },
+                isNeg = ticks < 0;
 
             if (formatStr) {
                 return formatStr.replace(/(\\.|'[^']*'|"[^"]*"|dd?|HH?|hh?|mm?|ss?|tt?|f{1,7}|\:|\/)/g,
@@ -238,7 +290,7 @@
             }
 
             if (ticks.abs().gte(864e9)) {
-                result += format(ticks.toNumberDivided(864e9)) + ".";
+                result += format(ticks.toNumberDivided(864e9), 1) + ".";
                 ticks = ticks.mod(864e9);
             }
 
@@ -253,7 +305,7 @@
                 result += "." + format(ticks.toNumber(), 7);
             }
 
-            return result;
+            return (isNeg ? "-" : "") + result;
         }
     });
 

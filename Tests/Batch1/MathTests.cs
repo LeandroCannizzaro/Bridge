@@ -65,10 +65,10 @@ namespace Bridge.ClientTest
         [Test]
         public void AbsOfDecimalWorks()
         {
-            NumberHelper.AssertDecimal(10.0, Math.Abs(-10.0m));
-            NumberHelper.AssertDecimal(10.5, Math.Abs(10.5m));
-            NumberHelper.AssertDecimal(10.5, Math.Abs(-10.5m));
-            NumberHelper.AssertDecimal(0, Math.Abs(0m));
+            NumberHelper.AssertDecimal(10.0m, Math.Abs(-10.0m));
+            NumberHelper.AssertDecimal(10.5m, Math.Abs(10.5m));
+            NumberHelper.AssertDecimal(10.5m, Math.Abs(-10.5m));
+            NumberHelper.AssertDecimal(0m, Math.Abs(0m));
         }
 
         [Test]
@@ -224,8 +224,8 @@ namespace Bridge.ClientTest
         [Test]
         public void MaxOfDecimalWorks()
         {
-            NumberHelper.AssertDecimal(3.0, Math.Max(-14.5m, 3.0m));
-            NumberHelper.AssertDecimal(5.4, Math.Max(5.4m, 3.0m));
+            NumberHelper.AssertDecimal(3.0m, Math.Max(-14.5m, 3.0m));
+            NumberHelper.AssertDecimal(5.4m, Math.Max(5.4m, 3.0m));
         }
 
         [Test]
@@ -301,8 +301,8 @@ namespace Bridge.ClientTest
         [Test]
         public void MinOfDecimalWorks()
         {
-            NumberHelper.AssertDecimal(-14.5, Math.Min(-14.5m, 3.0m));
-            NumberHelper.AssertDecimal(3.0, Math.Min(5.4m, 3.0m));
+            NumberHelper.AssertDecimal(-14.5m, Math.Min(-14.5m, 3.0m));
+            NumberHelper.AssertDecimal(3.0m, Math.Min(5.4m, 3.0m));
         }
 
         [Test]
@@ -726,6 +726,12 @@ namespace Bridge.ClientTest
             NumberHelper.AssertDoubleWithEpsilon8(Math.IEEERemainder(-16.3, 4.1), 0.0999999999999979);
             NumberHelper.AssertDoubleWithEpsilon8(Math.IEEERemainder(17.8, -4.1), 1.4);
             NumberHelper.AssertDoubleWithEpsilon8(Math.IEEERemainder(-17.8, -4.1), -1.4);
+
+            // Issue #3899
+            NumberHelper.AssertDoubleWithEpsilon8(1, Math.IEEERemainder(-3, 2));
+            NumberHelper.AssertDoubleWithEpsilon8(1, Math.IEEERemainder(5, 2));
+            NumberHelper.AssertDoubleWithEpsilon8(2, Math.IEEERemainder(2, Double.NegativeInfinity));
+            NumberHelper.AssertDoubleWithEpsilon8(-4.3, Math.IEEERemainder(-4.3, Double.NegativeInfinity));
         }
 
         [Test]

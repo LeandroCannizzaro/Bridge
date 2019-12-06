@@ -2,8 +2,8 @@ module.exports = function(grunt) {
     var browsers = [
     {
         browserName: "firefox",
-        version: "52",
-        platform: "WIN8"
+        version: "54",
+        platform: "Windows 10"
     }
     , {
         browserName: "googlechrome",
@@ -16,7 +16,7 @@ module.exports = function(grunt) {
     , {
         browserName: "googlechrome",
         platform: "linux"
-    } 
+    }
     //, {
         // browserName: "iphone",
         // platform: 'Mac 10.10',
@@ -59,6 +59,10 @@ module.exports = function(grunt) {
                     build: process.env.TRAVIS_JOB_ID,
                     testname: "Bridge.NET client tests",
                     throttled: 4,
+                    pollInterval: 10000,
+                    statusCheckAttempts: 100,
+                    maxDuration: 1000,
+                    maxRetries: 2,
                     sauceConfig: {
                         // https://wiki.saucelabs.com/display/DOCS/Test+Configuration+Options
                         'video-upload-on-pass': false

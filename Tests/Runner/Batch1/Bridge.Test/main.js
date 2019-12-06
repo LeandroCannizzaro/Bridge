@@ -50,8 +50,7 @@ Bridge.assembly("Bridge.Test.Bridge.ClientTest", function ($asm, globals) {
 
                     try {
                         instance.SetUp();
-                    }
-                    catch ($e1) {
+                    } catch ($e1) {
                         $e1 = System.Exception.create($e1);
                         assert.ok(false, "The test failed SetUp");
 
@@ -260,7 +259,7 @@ Bridge.assembly("Bridge.Test.Bridge.ClientTest", function ($asm, globals) {
                 },
                 AddClass: function (el, name) {
                     if (!Bridge.Test.Runtime.ContextHelper.HasClass(el, name)) {
-                        el.className = (el.className || "") + ((((el.className != null ? " " : "") || "") + (name || "")) || "");
+                        el.className = (el.className || "") + ((el.className != null ? " " : "") || "") + (name || "");
                     }
                 },
                 RemoveClass: function (el, name) {
@@ -302,9 +301,10 @@ Bridge.assembly("Bridge.Test.Bridge.ClientTest", function ($asm, globals) {
                         }
                     } finally {
                         if (Bridge.is($t, System.IDisposable)) {
-                            $t.System$IDisposable$dispose();
+                            $t.System$IDisposable$Dispose();
                         }
-                    }},
+                    }
+                },
                 Init: function () {
                     // Check that required elements exist and created if required
                     var ensure = $asm.$.Bridge.Test.Runtime.ContextHelper.f1;
@@ -424,8 +424,7 @@ Bridge.assembly("Bridge.Test.Bridge.ClientTest", function ($asm, globals) {
 
                     try {
                         block();
-                    }
-                    catch (ex) {
+                    } catch (ex) {
                         ex = System.Exception.create(ex);
                         actual = Bridge.Reflection.getTypeFullName(Bridge.getType(ex));
                     }

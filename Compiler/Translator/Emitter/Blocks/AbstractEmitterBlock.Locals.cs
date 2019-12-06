@@ -7,7 +7,6 @@ using ICSharpCode.NRefactory.TypeSystem;
 using ICSharpCode.NRefactory.TypeSystem.Implementation;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Win32.SafeHandles;
 
 namespace Bridge.Translator
 {
@@ -143,7 +142,7 @@ namespace Bridge.Translator
                 this.Emitter.LocalsMap[lrr.Variable] = result + (oldValue.EndsWith(".v") ? ".v" : "");
             }
 
-            if (this.Emitter.IsAsync && !this.Emitter.AsyncVariables.Contains(result))
+            if (this.Emitter.IsAsync && !this.Emitter.AsyncVariables.Contains(result) && (lrr == null || !lrr.IsParameter))
             {
                 this.Emitter.AsyncVariables.Add(result);
             }
@@ -271,6 +270,30 @@ namespace Bridge.Translator
                                     else if (prm.ConstantValue == null && prm.Type.Kind == TypeKind.TypeParameter)
                                     {
                                         this.Write(JS.Funcs.BRIDGE_GETDEFAULTVALUE + "(" + BridgeTypes.ToJsName(prm.Type, this.Emitter) + ")");
+                                    }
+                                    else if (prm.Type.Kind == TypeKind.Enum)
+                                    {
+                                        var enumMode = Helpers.EnumEmitMode(prm.Type);
+
+                                        if (enumMode >= 3 && enumMode < 7)
+                                        {
+                                            var members = prm.Type.GetMembers(options: GetMemberOptions.IgnoreInheritedMembers);
+                                            var member = members.FirstOrDefault(m => m is IField field && field.ConstantValue == prm.ConstantValue);
+
+                                            if (member != null)
+                                            {
+                                                string enumStringName = this.Emitter.GetEntityName(member);
+                                                this.WriteScript(enumStringName);
+                                            }
+                                            else
+                                            {
+                                                this.WriteScript(prm.ConstantValue);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            this.WriteScript(prm.ConstantValue);
+                                        }
                                     }
                                     else
                                     {

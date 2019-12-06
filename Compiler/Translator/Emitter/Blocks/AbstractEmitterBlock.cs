@@ -1,3 +1,4 @@
+using System.Text;
 using Bridge.Contract;
 using Bridge.Contract.Constants;
 using ICSharpCode.NRefactory.CSharp;
@@ -42,6 +43,8 @@ namespace Bridge.Translator
 
         private int startPos;
         private int checkPos;
+        private StringBuilder checkedOutput;
+
         protected virtual void BeginEmit()
         {
             if (this.NeedSequencePoint())
@@ -49,12 +52,13 @@ namespace Bridge.Translator
                 this.startPos = this.Emitter.Output.Length;
                 this.WriteSequencePoint(this.Emitter.Translator.EmitNode.Region);
                 this.checkPos = this.Emitter.Output.Length;
+                this.checkedOutput = this.Emitter.Output;
             }
         }
 
         protected virtual void EndEmit()
         {
-            if (this.NeedSequencePoint() && this.checkPos == this.Emitter.Output.Length)
+            if (this.NeedSequencePoint() && this.checkPos == this.Emitter.Output.Length && this.checkedOutput == this.Emitter.Output)
             {
                 this.Emitter.Output.Length = this.startPos;
             }
@@ -78,9 +82,6 @@ namespace Bridge.Translator
             }
 
             return false;
-
-            //return this.Emitter.Translator.EmitNode != null && !this.Emitter.Translator.EmitNode.Region.IsEmpty;
-            //return this.Emitter.Translator.EmitNode is Statement && !(this.Emitter.Translator.EmitNode is BlockStatement);
         }
 
         public virtual void EmitBlockOrIndentedLine(AstNode node)
@@ -162,7 +163,7 @@ namespace Bridge.Translator
 
             if (node is BinaryOperatorExpression)
             {
-                var binaryOperatorExpression = (BinaryOperatorExpression) node;
+                var binaryOperatorExpression = (BinaryOperatorExpression)node;
                 if (binaryOperatorExpression.Operator == BinaryOperatorType.BitwiseAnd ||
                     binaryOperatorExpression.Operator == BinaryOperatorType.BitwiseOr ||
                     binaryOperatorExpression.Operator == BinaryOperatorType.ConditionalOr ||
@@ -214,16 +215,29 @@ namespace Bridge.Translator
             this.Write(JS.Vars.ASYNC_STEP + " = " + this.Emitter.AsyncBlock.Step + ";");
             this.WriteNewLine();
 
-            if (this.Emitter.AsyncBlock.IsTaskReturn)
-            {
-                this.Write(JS.Vars.ASYNC_TASK + index + "." + JS.Funcs.CONTINUE_WITH + "(" + JS.Funcs.ASYNC_BODY + ");");
-            }
-            else
-            {
-                this.Write(JS.Vars.ASYNC_TASK + index + "." + JS.Funcs.CONTINUE_WITH + "(" + JS.Funcs.ASYNC_BODY + ", true);");
-            }
+            this.WriteIf();
+            this.WriteOpenParentheses();
+
+            this.Write(JS.Vars.ASYNC_TASK + index + ".isCompleted()");
+
+            this.WriteCloseParentheses();
+
+            this.WriteSpace();
+
+            this.WriteBlock("continue;");
+
+            this.Write(JS.Vars.ASYNC_TASK + index + "." + JS.Funcs.CONTINUE_WITH + "(" + JS.Funcs.ASYNC_BODY + ");");
 
             this.WriteNewLine();
+
+            if (this.Emitter.WrapRestCounter > 0)
+            {
+                this.EndBlock();
+                this.Write("));");
+                this.WriteNewLine();
+                this.Emitter.WrapRestCounter--;
+            }
+
             this.Write("return;");
 
             var asyncStep = this.Emitter.AsyncBlock.AddAsyncStep(index);
@@ -351,7 +365,7 @@ namespace Bridge.Translator
             }
             else
             {
-                if(colon)
+                if (colon)
                 {
                     this.WriteScript(name);
                 }

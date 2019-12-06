@@ -1,11 +1,11 @@
     var array = {
         toIndex: function (arr, indices) {
             if (indices.length !== (arr.$s ? arr.$s.length : 1)) {
-                throw new System.ArgumentException("Invalid number of indices");
+                throw new System.ArgumentException.$ctor1("Invalid number of indices");
             }
 
             if (indices[0] < 0 || indices[0] >= (arr.$s ? arr.$s[0] : arr.length)) {
-                throw new System.IndexOutOfRangeException("Index 0 out of range");
+                throw new System.IndexOutOfRangeException.$ctor1("Index 0 out of range");
             }
 
             var idx = indices[0],
@@ -14,7 +14,7 @@
             if (arr.$s) {
                 for (i = 1; i < arr.$s.length; i++) {
                     if (indices[i] < 0 || indices[i] >= arr.$s[i]) {
-                        throw new System.IndexOutOfRangeException("Index " + i + " out of range");
+                        throw new System.IndexOutOfRangeException.$ctor1("Index " + i + " out of range");
                     }
 
                     idx = idx * arr.$s[i] + indices[i];
@@ -39,14 +39,14 @@
 
         get: function (arr) {
             if (arguments.length < 2) {
-                throw new System.ArgumentNullException("indices");
+                throw new System.ArgumentNullException.$ctor1("indices");
             }
 
             var idx = Array.prototype.slice.call(arguments, 1);
 
             for (var i = 0; i < idx.length; i++) {
                 if (!Bridge.hasValue(idx[i])) {
-                    throw new System.ArgumentNullException("indices");
+                    throw new System.ArgumentNullException.$ctor1("indices");
                 }
             }
 
@@ -74,7 +74,7 @@
         },
 
         getRank: function (arr) {
-            return arr.$s ? arr.$s.length : 1;
+            return arr.$type ? arr.$type.$rank : (arr.$s ? arr.$s.length : 1);
         },
 
         getLower: function (arr, d) {
@@ -85,7 +85,7 @@
 
         create: function (defvalue, initValues, T, sizes) {
             if (sizes === null) {
-                throw new System.ArgumentNullException("length");
+                throw new System.ArgumentNullException.$ctor1("length");
             }
 
             var arr = [],
@@ -103,27 +103,41 @@
             if (sizes && Bridge.isArray(sizes)) {
                 for (i = 0; i < sizes.length; i++) {
                     j = sizes[i];
+
                     if (isNaN(j) || j < 0) {
-                        throw new System.ArgumentOutOfRangeException("length");
+                        throw new System.ArgumentOutOfRangeException.$ctor1("length");
                     }
+
                     length *= j;
                     arr.$s[i] = j;
                 }
             } else {
                 for (i = 3; i < arguments.length; i++) {
                     j = arguments[i];
+
                     if (isNaN(j) || j < 0) {
-                        throw new System.ArgumentOutOfRangeException("length");
+                        throw new System.ArgumentOutOfRangeException.$ctor1("length");
                     }
+
                     length *= j;
                     arr.$s[i - 3] = j;
                 }
             }
 
             arr.length = length;
+            var isFn = Bridge.isFunction(defvalue);
+
+            if (isFn) {
+                var v = defvalue();
+
+                if (!v || (!v.$kind && typeof v !== "object")) {
+                    isFn = false;
+                    defvalue = v;
+                }
+            }
 
             for (var k = 0; k < length; k++) {
-                arr[k] = defvalue;
+                arr[k] = isFn ? defvalue() : defvalue;
             }
 
             if (initValues) {
@@ -154,22 +168,33 @@
 
         init: function (length, value, T, addFn) {
             if (length == null) {
-                throw new System.ArgumentNullException("length");
+                throw new System.ArgumentNullException.$ctor1("length");
             }
 
             if (Bridge.isArray(length)) {
                 var elementType = value,
                     rank = T || 1;
+
                 System.Array.type(elementType, rank, length);
+
                 return length;
             }
 
             if (isNaN(length) || length < 0) {
-                throw new System.ArgumentOutOfRangeException("length");
+                throw new System.ArgumentOutOfRangeException.$ctor1("length");
             }
 
             var arr = new Array(length),
                 isFn = addFn !== true && Bridge.isFunction(value);
+
+            if (isFn) {
+                var v = value();
+
+                if (!v || (!v.$kind && typeof v !== "object")) {
+                    isFn = false;
+                    value = v;
+                }
+            }
 
             for (var i = 0; i < length; i++) {
                 arr[i] = isFn ? value() : value;
@@ -216,9 +241,16 @@
 
             if (type.$elementType && type.$isArray) {
                 var et = Bridge.getType(obj).$elementType;
+
                 if (et) {
+
+                    if (Bridge.Reflection.isValueType(et) !== Bridge.Reflection.isValueType(type.$elementType)) {
+                        return false;
+                    }
+
                     return System.Array.getRank(obj) === type.$rank && Bridge.Reflection.isAssignableFrom(type.$elementType, et);
                 }
+
                 type = Array;
             }
 
@@ -238,23 +270,37 @@
                 return true;
             }
 
-            return !!System.Array._typedArrays[String.prototype.slice.call(Object.prototype.toString.call(obj), 8, -1)];
+            var isTypedArray = !!System.Array._typedArrays[String.prototype.slice.call(Object.prototype.toString.call(obj), 8, -1)];
+
+            if (isTypedArray && !!System.Array._typedArrays[type.name]) {
+                return obj instanceof type;
+            }
+
+            return isTypedArray;
         },
 
         clone: function (arr) {
             var newArr;
+
             if (arr.length === 1) {
                 newArr = [arr[0]];
             } else {
                 newArr = arr.slice(0);
             }
+
             newArr.$type = arr.$type;
+            newArr.$v = arr.$v;
+            newArr.$s = arr.$s;
+            newArr.get = System.Array.$get;
+            newArr.set = System.Array.$set;
+
             return newArr;
         },
 
         getCount: function (obj, T) {
             var name,
                 v;
+
             if (Bridge.isArray(obj)) {
                 return obj.length;
             } else if (T && Bridge.isFunction(obj[name = "System$Collections$Generic$ICollection$1$" + Bridge.getTypeAlias(T) + "$getCount"])) {
@@ -297,9 +343,13 @@
             return false;
         },
 
-        checkReadOnly: function(obj, T, msg) {
-            if (System.Array.getIsReadOnly(obj, T)) {
-                throw new System.NotSupportedException(msg || "Collection was of a fixed size.");
+        checkReadOnly: function (obj, T, msg) {
+            if (Bridge.isArray(obj)) {
+                if (T) {
+                    throw new System.NotSupportedException.$ctor1(msg || "Collection was of a fixed size.");
+                }
+            } else if (System.Array.getIsReadOnly(obj, T)) {
+                throw new System.NotSupportedException.$ctor1(msg || "Collection is read-only.");
             }
         },
 
@@ -341,12 +391,13 @@
             }
 
             var is = Bridge.is(v, type);
+
             if (!is) {
                 if (v == null && Bridge.getDefaultValue(type) == null) {
                     return null;
                 }
 
-                throw new System.ArgumentException("The value " + unboxed + "is not of type " + Bridge.getTypeName(type) + " and cannot be used in this generic collection.");
+                throw new System.ArgumentException.$ctor1("The value " + unboxed + "is not of type " + Bridge.getTypeName(type) + " and cannot be used in this generic collection.");
             }
 
             return unboxed;
@@ -370,7 +421,7 @@
 
         fill: function (dst, val, index, count) {
             if (!Bridge.hasValue(dst)) {
-                throw new System.ArgumentNullException("dst");
+                throw new System.ArgumentNullException.$ctor1("dst");
             }
 
             if (index < 0 || count < 0 || (index + count) > dst.length) {
@@ -379,6 +430,15 @@
 
             var isFn = Bridge.isFunction(val);
 
+            if (isFn) {
+                var v = val();
+
+                if (!v || (!v.$kind && typeof v !== "object")) {
+                    isFn = false;
+                    val = v;
+                }
+            }
+
             while (--count >= 0) {
                 dst[index + count] = isFn ? val() : val;
             }
@@ -386,19 +446,19 @@
 
         copy: function (src, spos, dest, dpos, len) {
             if (!dest) {
-                throw new System.ArgumentNullException("dest", "Value cannot be null");
+                throw new System.ArgumentNullException.$ctor3("dest", "Value cannot be null");
             }
 
             if (!src) {
-                throw new System.ArgumentNullException("src", "Value cannot be null");
+                throw new System.ArgumentNullException.$ctor3("src", "Value cannot be null");
             }
 
             if (spos < 0 || dpos < 0 || len < 0) {
-                throw new System.ArgumentOutOfRangeException("Number was less than the array's lower bound in the first dimension");
+                throw new System.ArgumentOutOfRangeException.$ctor1("bound", "Number was less than the array's lower bound in the first dimension");
             }
 
             if (len > (src.length - spos) || len > (dest.length - dpos)) {
-                throw new System.ArgumentException("Destination array was not long enough. Check destIndex and length, and the array's lower bounds");
+                throw new System.ArgumentException.$ctor1("Destination array was not long enough. Check destIndex and length, and the array's lower bounds");
             }
 
             if (spos < dpos && src === dest) {
@@ -424,7 +484,7 @@
             } else if (Bridge.isFunction(obj[name = "System$Collections$ICollection$copyTo"])) {
                 obj[name](dest, index);
             } else {
-                throw new System.NotImplementedException("copyTo");
+                throw new System.NotImplementedException.$ctor1("copyTo");
             }
         },
 
@@ -537,7 +597,12 @@
                 v;
 
             if (Bridge.isArray(obj)) {
-                return obj.$type && Bridge.getDefaultValue(obj.$type.$elementType) != null ? Bridge.box(obj[idx], obj.$type.$elementType) : obj[idx];
+                v = obj[idx];
+                if (T) {
+                    return v;
+                }
+
+                return (obj.$type && (Bridge.isNumber(v) || Bridge.isBoolean(v) || Bridge.isDate(v))) ? Bridge.box(v, obj.$type.$elementType) : v;
             } else if (T && Bridge.isFunction(obj[name = "System$Collections$Generic$IList$1$" + Bridge.getTypeAlias(T) + "$getItem"])) {
                 v = obj[name](idx);
                 return v;
@@ -600,28 +665,38 @@
             }
 
             var is = Bridge.is(v, type);
+
             if (!is) {
                 if (v == null) {
                     return Bridge.getDefaultValue(type);
                 }
 
-                throw new System.ArgumentException("Cannot widen from source type to target type either because the source type is a not a primitive type or the conversion cannot be accomplished.");
+                throw new System.ArgumentException.$ctor1("Cannot widen from source type to target type either because the source type is a not a primitive type or the conversion cannot be accomplished.");
             }
 
             return unboxed;
         },
 
-        resize: function (arr, newSize, val) {
+        resize: function (arr, newSize, val, T) {
             if (newSize < 0) {
-                throw new System.ArgumentOutOfRangeException("newSize", null, null, newSize);
+                throw new System.ArgumentOutOfRangeException.$ctor3("newSize", newSize, "newSize cannot be less than 0.");
             }
 
             var oldSize = 0,
                 isFn = Bridge.isFunction(val),
                 ref = arr.v;
 
+            if (isFn) {
+                var v = val();
+
+                if (!v || (!v.$kind && typeof v !== "object")) {
+                    isFn = false;
+                    val = v;
+                }
+            }
+
             if (!ref) {
-                ref = new Array(newSize);
+                ref = System.Array.init(new Array(newSize), T);
             } else {
                 oldSize = ref.length;
                 ref.length = newSize;
@@ -631,12 +706,14 @@
                 ref[i] = isFn ? val() : val;
             }
 
+            ref.$s = [ref.length];
+
             arr.v = ref;
         },
 
         reverse: function (arr, index, length) {
             if (!array) {
-                throw new System.ArgumentNullException("arr");
+                throw new System.ArgumentNullException.$ctor1("arr");
             }
 
             if (!index && index !== 0) {
@@ -645,11 +722,11 @@
             }
 
             if (index < 0 || length < 0) {
-                throw new System.ArgumentOutOfRangeException((index < 0 ? "index" : "length"), "Non-negative number required.");
+                throw new System.ArgumentOutOfRangeException.$ctor4((index < 0 ? "index" : "length"), "Non-negative number required.");
             }
 
             if ((array.length - index) < length) {
-                throw new System.ArgumentException("Offset and length were out of bounds for the array or count is greater than the number of elements from index to the end of the source collection.");
+                throw new System.ArgumentException.$ctor1("Offset and length were out of bounds for the array or count is greater than the number of elements from index to the end of the source collection.");
             }
 
             if (System.Array.getRank(arr) !== 1) {
@@ -670,21 +747,21 @@
 
         binarySearch: function (array, index, length, value, comparer) {
             if (!array) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             var lb = 0;
 
             if (index < lb || length < 0) {
-                throw new System.ArgumentOutOfRangeException(index < lb ? "index" : "length", "Non-negative number required.");
+                throw new System.ArgumentOutOfRangeException.$ctor4(index < lb ? "index" : "length", "Non-negative number required.");
             }
 
             if (array.length - (index - lb) < length) {
-                throw new System.ArgumentException("Offset and length were out of bounds for the array or count is greater than the number of elements from index to the end of the source collection.");
+                throw new System.ArgumentException.$ctor1("Offset and length were out of bounds for the array or count is greater than the number of elements from index to the end of the source collection.");
             }
 
             if (System.Array.getRank(array) !== 1) {
-                throw new System.RankException("Only single dimensional arrays are supported for the requested action.");
+                throw new System.RankException.$ctor1("Only single dimensional arrays are supported for the requested action.");
             }
 
             if (!comparer) {
@@ -700,9 +777,9 @@
                 i = lo + ((hi - lo) >> 1);
 
                 try {
-                    c = comparer.compare(array[i], value);
+                    c = System.Collections.Generic.Comparer$1.get(comparer)(array[i], value);
                 } catch (e) {
-                    throw new System.InvalidOperationException("Failed to compare two elements in the array.", e);
+                    throw new System.InvalidOperationException.$ctor2("Failed to compare two elements in the array.", e);
                 }
 
                 if (c === 0) {
@@ -719,9 +796,47 @@
             return ~lo;
         },
 
+        sortDict: function (keys, values, index, length, comparer) {
+            if (!comparer) {
+                comparer = System.Collections.Generic.Comparer$1.$default;
+            }
+
+            var list = [],
+                fn = Bridge.fn.bind(comparer, System.Collections.Generic.Comparer$1.get(comparer));
+
+            if (length == null) {
+                length = keys.length;
+            }
+
+            for (var j = 0; j < keys.length; j++) {
+                list.push({ key: keys[j], value: values[j] });
+            }
+
+            if (index === 0 && length === list.length) {
+                list.sort(function (x, y) {
+                    return fn(x.key, y.key);
+                });
+            } else {
+                var newarray = list.slice(index, index + length);
+
+                newarray.sort(function (x, y) {
+                    return fn(x.key, y.key);
+                });
+
+                for (var i = index; i < (index + length); i++) {
+                    list[i] = newarray[i - index];
+                }
+            }
+
+            for (var k = 0; k < list.length; k++) {
+                keys[k] = list[k].key;
+                values[k] = list[k].value;
+            }
+        },
+
         sort: function (array, index, length, comparer) {
             if (!array) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (arguments.length === 2 && typeof index === "function") {
@@ -747,11 +862,11 @@
             }
 
             if (index === 0 && length === array.length) {
-                array.sort(Bridge.fn.bind(comparer, comparer.compare));
+                array.sort(Bridge.fn.bind(comparer, System.Collections.Generic.Comparer$1.get(comparer)));
             } else {
                 var newarray = array.slice(index, index + length);
 
-                newarray.sort(Bridge.fn.bind(comparer, comparer.compare));
+                newarray.sort(Bridge.fn.bind(comparer, System.Collections.Generic.Comparer$1.get(comparer)));
 
                 for (var i = index; i < (index + length) ; i++) {
                     array[i] = newarray[i - index];
@@ -797,7 +912,7 @@
                     }
                 } finally {
                     if (Bridge.is(e, System.IDisposable)) {
-                        e.dispose();
+                        e.Dispose();
                     }
                 }
             }
@@ -805,11 +920,11 @@
 
         convertAll: function (array, converter) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (!Bridge.hasValue(converter)) {
-                throw new System.ArgumentNullException("converter");
+                throw new System.ArgumentNullException.$ctor1("converter");
             }
 
             var array2 = array.map(converter);
@@ -819,11 +934,11 @@
 
         find: function (T, array, match) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (!Bridge.hasValue(match)) {
-                throw new System.ArgumentNullException("match");
+                throw new System.ArgumentNullException.$ctor1("match");
             }
 
             for (var i = 0; i < array.length; i++) {
@@ -837,11 +952,11 @@
 
         findAll: function (array, match) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (!Bridge.hasValue(match)) {
-                throw new System.ArgumentNullException("match");
+                throw new System.ArgumentNullException.$ctor1("match");
             }
 
             var list = [];
@@ -857,7 +972,7 @@
 
         findIndex: function (array, startIndex, count, match) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (arguments.length === 2) {
@@ -870,15 +985,15 @@
             }
 
             if (startIndex < 0 || startIndex > array.length) {
-                throw new System.ArgumentOutOfRangeException("startIndex");
+                throw new System.ArgumentOutOfRangeException.$ctor1("startIndex");
             }
 
             if (count < 0 || startIndex > array.length - count) {
-                throw new System.ArgumentOutOfRangeException("count");
+                throw new System.ArgumentOutOfRangeException.$ctor1("count");
             }
 
             if (!Bridge.hasValue(match)) {
-                throw new System.ArgumentNullException("match");
+                throw new System.ArgumentNullException.$ctor1("match");
             }
 
             var endIndex = startIndex + count;
@@ -894,11 +1009,11 @@
 
         findLast: function (T, array, match) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (!Bridge.hasValue(match)) {
-                throw new System.ArgumentNullException("match");
+                throw new System.ArgumentNullException.$ctor1("match");
             }
 
             for (var i = array.length - 1; i >= 0; i--) {
@@ -912,7 +1027,7 @@
 
         findLastIndex: function (array, startIndex, count, match) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (arguments.length === 2) {
@@ -925,21 +1040,21 @@
             }
 
             if (!Bridge.hasValue(match)) {
-                throw new System.ArgumentNullException("match");
+                throw new System.ArgumentNullException.$ctor1("match");
             }
 
             if (array.length === 0) {
                 if (startIndex !== -1) {
-                    throw new System.ArgumentOutOfRangeException("startIndex");
+                    throw new System.ArgumentOutOfRangeException.$ctor1("startIndex");
                 }
             } else {
                 if (startIndex < 0 || startIndex >= array.length) {
-                    throw new System.ArgumentOutOfRangeException("startIndex");
+                    throw new System.ArgumentOutOfRangeException.$ctor1("startIndex");
                 }
             }
 
             if (count < 0 || startIndex - count + 1 < 0) {
-                throw new System.ArgumentOutOfRangeException("count");
+                throw new System.ArgumentOutOfRangeException.$ctor1("count");
             }
 
             var endIndex = startIndex - count;
@@ -955,11 +1070,11 @@
 
         forEach: function (array, action) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (!Bridge.hasValue(action)) {
-                throw new System.ArgumentNullException("action");
+                throw new System.ArgumentNullException.$ctor1("action");
             }
 
             for (var i = 0; i < array.length; i++) {
@@ -969,7 +1084,7 @@
 
         indexOfT: function (array, value, startIndex, count) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (arguments.length === 2) {
@@ -980,19 +1095,39 @@
             }
 
             if (startIndex < 0 || (startIndex >= array.length && array.length > 0)) {
-                throw new System.ArgumentOutOfRangeException("startIndex", "out of range");
+                throw new System.ArgumentOutOfRangeException.$ctor4("startIndex", "out of range");
             }
 
             if (count < 0 || count > array.length - startIndex) {
-                throw new System.ArgumentOutOfRangeException("count", "out of range");
+                throw new System.ArgumentOutOfRangeException.$ctor4("count", "out of range");
             }
 
             return System.Array.indexOf(array, value, startIndex, count);
         },
 
+        isFixedSize: function (array) {
+            if (Bridge.isArray(array)) {
+                return true;
+            } else if (array["System$Collections$IList$isFixedSize"] != null) {
+                return array["System$Collections$IList$isFixedSize"];
+            } else if(array["System$Collections$IList$IsFixedSize"] != null) {
+                return array["System$Collections$IList$IsFixedSize"];
+            } else if (array.isFixedSize != null) {
+                return array.isFixedSize;
+            } else if (array.IsFixedSize != null) {
+                return array.IsFixedSize;
+            }
+
+            return true;
+        },
+
+        isSynchronized: function (array) {
+            return false;
+        },
+
         lastIndexOfT: function (array, value, startIndex, count) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (arguments.length === 2) {
@@ -1003,11 +1138,11 @@
             }
 
             if (startIndex < 0 || (startIndex >= array.length && array.length > 0)) {
-                throw new System.ArgumentOutOfRangeException("startIndex", "out of range");
+                throw new System.ArgumentOutOfRangeException.$ctor4("startIndex", "out of range");
             }
 
             if (count < 0 || startIndex - count + 1 < 0) {
-                throw new System.ArgumentOutOfRangeException("count", "out of range");
+                throw new System.ArgumentOutOfRangeException.$ctor4("count", "out of range");
             }
 
             var endIndex = startIndex - count + 1;
@@ -1023,13 +1158,17 @@
             return -1;
         },
 
+        syncRoot: function (array) {
+            return array;
+        },
+
         trueForAll: function (array, match) {
             if (!Bridge.hasValue(array)) {
-                throw new System.ArgumentNullException("array");
+                throw new System.ArgumentNullException.$ctor1("array");
             }
 
             if (!Bridge.hasValue(match)) {
-                throw new System.ArgumentNullException("match");
+                throw new System.ArgumentNullException.$ctor1("match");
             }
 
             for (var i = 0; i < array.length; i++) {
@@ -1062,33 +1201,39 @@
 
             if (!result) {
                 name = Bridge.getTypeName(t) + "[" + System.String.fromCharCount(",".charCodeAt(0), rank - 1) + "]";
+
                 var old = Bridge.Class.staticInitAllow;
+
                 result = Bridge.define(name, {
-                    $inherits: [Array, System.Collections.ICollection, System.ICloneable, System.Collections.Generic.IList$1(t), System.Collections.Generic.IReadOnlyCollection$1(t)],
+                    $inherits: [System.Array, System.Collections.ICollection, System.ICloneable, System.Collections.Generic.IList$1(t), System.Collections.Generic.IReadOnlyCollection$1(t)],
                     $noRegister: true,
                     statics: {
                         $elementType: t,
                         $rank: rank,
                         $isArray: true,
-                        $is: function(obj) {
+                        $is: function (obj) {
                             return System.Array.is(obj, this);
                         },
-                        getDefaultValue: function() {
+                        getDefaultValue: function () {
                             return null;
                         },
-                        createInstance: function() {
+                        createInstance: function () {
                             var arr;
+
                             if (this.$rank === 1) {
                                 arr = [];
                             } else {
                                 var args = [Bridge.getDefaultValue(this.$elementType), null, this.$elementType];
+
                                 for (var j = 0; j < this.$rank; j++) {
                                     args.push(0);
                                 }
+
                                 arr = System.Array.create.apply(System.Array, args);
                             }
 
                             arr.$type = this;
+
                             return arr;
                         }
                     }
@@ -1097,9 +1242,11 @@
                 typeCache.push(result);
 
                 Bridge.Class.staticInitAllow = true;
+
                 if (result.$staticInit) {
                     result.$staticInit();
                 }
+
                 Bridge.Class.staticInitAllow = old;
             }
 
@@ -1108,8 +1255,14 @@
             }
 
             return arr || result;
+        },
+        getLongLength: function (array) {
+            return System.Int64(array.length);
         }
     };
 
-    System.Array = array;
+    Bridge.define("System.Array", {
+        statics: array
+    });
+
     System.Array.$cache = {};

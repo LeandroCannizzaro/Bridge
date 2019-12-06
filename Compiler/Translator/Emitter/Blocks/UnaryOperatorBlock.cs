@@ -1,10 +1,9 @@
 using Bridge.Contract;
 using Bridge.Contract.Constants;
-
 using ICSharpCode.NRefactory.CSharp;
 using ICSharpCode.NRefactory.Semantics;
 using ICSharpCode.NRefactory.TypeSystem;
-
+using System;
 using System.Linq;
 
 namespace Bridge.Translator
@@ -91,9 +90,16 @@ namespace Bridge.Translator
             OperatorResolveResult orr = resolveOperator as OperatorResolveResult;
             int count = this.Emitter.Writers.Count;
 
-            if (resolveOperator is ConstantResolveResult)
+            if (resolveOperator is ConstantResolveResult crr)
             {
-                this.WriteScript(((ConstantResolveResult)resolveOperator).ConstantValue);
+                object constantValue = crr.ConstantValue;
+
+                if (unaryOperatorExpression.Operator == UnaryOperatorType.Minus && SyntaxHelper.IsNumeric(constantValue.GetType()) && Convert.ToDouble(constantValue) == 0)
+                {
+                    this.Write("-");
+                }
+
+                this.WriteScript(constantValue);
                 return;
             }
 
@@ -465,7 +471,7 @@ namespace Bridge.Translator
                 method = type.GetMethods(m => m.Name == name, GetMemberOptions.IgnoreInheritedMembers).FirstOrDefault();
             }
 
-            if (orr.IsLiftedOperator)
+            if (orr != null && orr.IsLiftedOperator)
             {
                 if (!isOneOp)
                 {

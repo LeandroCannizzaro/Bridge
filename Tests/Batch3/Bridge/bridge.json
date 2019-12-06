@@ -3,6 +3,7 @@
   "cleanOutputFolderBeforeBuildPattern": "*.*",
   "outputFormatting": "Formatted",
   "fileName": "code.js",
+  "locales": "en-US",
   "outputBy": "Project",
   "fileNameCasing": "CamelCase",
   "html": {
@@ -15,10 +16,11 @@
   ],
   "reflection": {
     "disabled": true,
-    "target":  "Inline"
+    "target": "Inline"
   },
   "test": {
     "skipResources": true,
     "skipAuxiliary": true
-  }
+  },
+  "ignoreDuplicateTypes": true
 }

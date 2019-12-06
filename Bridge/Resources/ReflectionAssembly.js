@@ -1,4 +1,4 @@
-    Bridge.assembly = function (assemblyName, res, callback) {
+    Bridge.assembly = function (assemblyName, res, callback, restore) {
         if (!callback) {
             callback = res;
             res = {};
@@ -14,6 +14,8 @@
             Bridge.apply(asm.res, res || {});
         }
 
+        var oldAssembly = Bridge.$currentAssembly;
+
         Bridge.$currentAssembly = asm;
 
         if (callback) {
@@ -26,6 +28,10 @@
         }
 
         Bridge.init();
+
+        if (restore) {
+            Bridge.$currentAssembly = oldAssembly;
+        }
     };
 
     Bridge.define("System.Reflection.Assembly", {
@@ -80,13 +86,13 @@
         },
 
         getCustomAttributes: function (attributeType) {
-            if (attributeType && !Bridge.isBoolean(attributeType)) {
+            if (this.attr && attributeType && !Bridge.isBoolean(attributeType)) {
                 return this.attr.filter(function (a) {
                     return Bridge.is(a, attributeType);
                 });
             }
 
-            return this.attr;
+            return this.attr || [];
         }
     });
 
@@ -94,4 +100,5 @@
     Bridge.SystemAssembly = Bridge.$currentAssembly;
     Bridge.SystemAssembly.$types["System.Reflection.Assembly"] = System.Reflection.Assembly;
     System.Reflection.Assembly.$assembly = Bridge.SystemAssembly;
+
     var $asm = Bridge.$currentAssembly;
